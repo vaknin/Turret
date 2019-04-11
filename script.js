@@ -16,9 +16,10 @@ class Turret{
         this.y = y;
         this.r1 = 35;
         this.r2 = 25;
+        this.locked = false;
         this.loaded = true;
         this.reloadTime = 600;
-        this.rotation = 0;
+        this.rotation = 270;
         this.rotationSpeed = 1;
     }
 
@@ -46,44 +47,61 @@ class Turret{
             
             let t = targets[0];
 
-            let angleDegrees = parseInt(getAngle(this.x, this.y, t.x, t.y));
-            if (this.x > t.x){
-                angleDegrees += 180;
-            }
-
-            if (angleDegrees < 0){
-            }
+            let angle = getAngle(this.x, this.y, t.x, t.y);
 
             //Rotate cannon
-            if (this.rotation != angleDegrees){
+            if (!this.locked && this.rotation != angle){
+
+                //#region Rotation direction
+                //Avoid rotating more than 180deg at a time
+                if (this.rotation - angle > 180){
+                    angle < this.rotation ? this.rotation += this.rotationSpeed : this.rotation -= this.rotationSpeed;
+                    angle += 360;
+                }
+
+                else if (angle - this.rotation > 180){
+                    angle < this.rotation ? this.rotation += this.rotationSpeed : this.rotation -= this.rotationSpeed;
+                    angle -= 360;
+                }
+
+                else{
+                    angle < this.rotation ? this.rotation -= this.rotationSpeed : this.rotation += this.rotationSpeed;
+                }
+
+                //#endregion
 
                 ctx.save();
                 ctx.translate(this.x, this.y);
-                ctx.rotate(this.rotation * Math.PI/180);
+                ctx.rotate((this.rotation - 180) * Math.PI/180);
                 ctx.translate(this.x*-1, this.y*-1);
                 ctx.fillRect(this.x, this.y, 45, 7.5);
                 ctx.closePath();
                 ctx.restore();
-                angleDegrees < this.rotation ? this.rotation-= this.rotationSpeed : this.rotation += this.rotationSpeed;
+
+                //Lock on
+                if (this.rotation == angle){
+                    this.locked = true;
+                }
+
                 return;
             }
 
             //Shoot the target
-            else if (this.loaded){
+            else if (this.locked && this.loaded){
                 this.loaded = false;
                 setTimeout(() => {
                     this.loaded = true;
                 }, this.reloadTime);
 
                 let b = new Bullet(this.x, this.y, t.x, t.y, t);
+                b.turret = this;
                 objects.push(b);
-                
             }
         }
 
         ctx.save();
         ctx.translate(this.x, this.y);
-        ctx.rotate(this.rotation * Math.PI/180);
+        ctx.rotate((this.rotation - 180) * Math.PI/180);
         ctx.translate(this.x*-1, this.y*-1);
         ctx.fillRect(this.x, this.y, 45, 7.5);
         ctx.closePath();
@@ -95,8 +113,8 @@ class Target{
     constructor(x, y){
         this.x = x;
         this.y = y;
-        this.r = 25;
-        this.hp = 1;
+        this.r = 10;
+        this.hp = 3;
     }
 
     draw(){
@@ -187,6 +205,7 @@ class Bullet{
         if (target.hp <= 0){
             objects.splice(objects.indexOf(target), 1);
             targets.splice(targets.indexOf(target), 1);
+            this.turret.locked = false;
         }
     }
 }
@@ -218,9 +237,7 @@ canvas.addEventListener('click', e => {
 function getAngle(x1,y1, x2,y2){
     let opposite = (y2-y1);
     let adjacent = (x2-x1);
-    let angle = (Math.atan(opposite/adjacent) * 180 / Math.PI).toFixed(0);
-    console.log(angle);
-    
+    let angle = parseInt((Math.atan2(opposite, adjacent) * 180 / Math.PI).toFixed(0)) + 180;
     return angle;
 }
 
