@@ -1,8 +1,11 @@
 //#region Global variables
 let canvas = document.getElementById('canvas');
 let ctx = canvas.getContext('2d');
-const red = 'rgb(255, 0, 0)';
-const black = 'rgb(0, 0, 0)';
+const red = 'rgb(255, 70, 70)';
+const green = 'rgb(0, 175, 0)';
+const blue = 'rgb(0, 0, 255)';
+const black = 'rgb(20, 20, 20)';
+
 let objects = [];
 let targets = [];
 //#endregion
@@ -15,68 +18,80 @@ class Turret{
         this.y = y;
         this.r1 = 35;
         this.r2 = 25;
+        this.cannonLength = 50;
+        this.cannonWidth = 6;
         this.locked = false;
         this.loaded = true;
-        this.reloadTime = 600;
-        this.rotation = 270;
-        this.rotationSpeed = 1;
+        this.reloadTime = 50;
+        this.rotation = 90;
+        this.rotationSpeed = 17;
     }
 
     draw(){
+        
+        //Draw body
         this.drawBody();
 
         //Draw cannon
         ctx.beginPath();
         ctx.fillStyle = black;
 
-        //Calculate angle from turret to target
+        //If there are any targets
         if (targets.length > 0){
-            
-            //#region Choose nearest target
 
-            let bestDiff = 181;
-            let nearestTargetIndex = 0;
-            let t, diff;
-
-            //Loop through all targets and find the nearest target(that requires the least amount of rotation)
-            for (let i = 0; i < targets.length; i++){
-
-                t = targets[i];
-                let angle = getAngle(this.x, this.y, t.x, t.y);
-
-                //Calculate the difference between the current rotation and the target's angle
-                diff = Math.abs(this.rotation - angle);
-                
-                //If the difference between the current rotation and the new angle is > 180, subtract 360 from the difference
-                if (diff > 180){
-                    diff = Math.abs(diff - 360);
-                }
-
-                if (bestDiff > diff){
-                    bestDiff = diff;
-                    nearestTargetIndex = i;
-                }
-            }
-
-            t = targets[nearestTargetIndex];
-
-            //#endregion
-
-            let angle = getAngle(this.x, this.y, t.x, t.y);
-
-            //Rotate cannon
+            //Find a target
             if (!this.locked){
 
-                //#region Rotation direction
-                //Avoid rotating more than 180deg at a time
-                if (this.rotation - angle > 180){
-                    angle < this.rotation ? this.rotation += this.rotationSpeed : this.rotation -= this.rotationSpeed;
-                    angle += 360;
+                //#region Choose target
+
+                let bestDiff = 181;
+                let nearestTargetIndex = 0;
+                let t, diff;
+
+                //Loop through all targets and find the nearest target(that requires the least amount of rotation)
+                for (let i = 0; i < targets.length; i++){
+
+                    t = targets[i];
+                    let angle = getAngle(this.x, this.y, t.x, t.y);
+
+                    //Calculate the difference between the current rotation and the target's angle
+                    diff = Math.abs(this.rotation - angle);
+                    
+                    //If the difference between the current rotation and the new angle is > 180, subtract 360 from the difference
+                    if (diff > 180){
+                        diff = Math.abs(diff - 360);
+                    }
+
+                    if (bestDiff > diff){
+                        bestDiff = diff;
+                        nearestTargetIndex = i;
+                    }
                 }
 
-                else if (angle - this.rotation > 180){
-                    angle < this.rotation ? this.rotation += this.rotationSpeed : this.rotation -= this.rotationSpeed;
-                    angle -= 360;
+                t = targets[nearestTargetIndex];
+
+                //#endregion
+
+                //The angle from the turret to the target
+                let angle = getAngle(this.x, this.y, t.x, t.y);
+
+                //#region Rotate cannon
+
+                //If the rotation is more than half a circle
+                if (Math.abs(this.rotation - angle) > 180){
+
+                    //Go counter-clockwise
+                    if (angle > this.rotation){
+                        this.rotation -= this.rotationSpeed;
+                        angle -= 360;
+                    }
+                    
+                    //Go clockwise
+                    else{
+                        this.rotation += this.rotationSpeed;
+                        angle += 360;
+                        
+                    }
                 }
 
                 else{
@@ -85,17 +100,13 @@ class Turret{
 
                 //#endregion
 
-                ctx.save();
-                ctx.translate(this.x, this.y);
-                ctx.rotate((this.rotation - 180) * Math.PI/180);
-                ctx.translate(this.x*-1, this.y*-1);
-                ctx.fillRect(this.x, this.y, 45, 7.5);
-                ctx.closePath();
-                ctx.restore();
+                //Draw the cannon
+                this.drawCannon();
 
                 //Lock on
-                if (this.rotation == angle){
+                if (Math.abs(this.rotation - angle) <= this.rotationSpeed){
                     this.locked = true;
+                    this.target = t;
                 }
 
                 return;
@@ -103,41 +114,65 @@ class Turret{
 
             //Shoot the target
             if (this.locked && this.loaded){
-                this.loaded = false;
-                setTimeout(() => {
-                    this.loaded = true;
-                }, this.reloadTime);
-
-                let b = new Bullet(this.x, this.y, t.x, t.y, t);
-                b.turret = this;
-                objects.push(b);
+                this.fire();   
             }
         }
 
-        ctx.save();
-        ctx.translate(this.x, this.y);
-        ctx.rotate((this.rotation - 180) * Math.PI/180);
-        ctx.translate(this.x*-1, this.y*-1);
-        ctx.fillRect(this.x, this.y, 45, 7.5);
-        ctx.closePath();
-        ctx.restore();
+        this.drawCannon();
     }
 
     drawBody(){
 
-        //Inner circle
+        //Outer circle
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.r1, 0, Math.PI*2, true);
-        ctx.fillStyle = 'rgb(35, 35, 35)';
+        ctx.fillStyle = green;
         ctx.fill();
         ctx.closePath();
 
-        //Outer circle
+        //Inner circle
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.r2, 0, Math.PI*2, true);
-        ctx.fillStyle = 'rgb(25, 25, 225)';
+        ctx.fillStyle = red;
         ctx.fill();
         ctx.closePath();
+    }
+
+    drawCannon(){
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate((this.rotation - 180) * Math.PI/180);
+        ctx.translate(this.x*-1, this.y*-1);
+        ctx.fillRect(this.x, this.y, this.cannonLength, this.cannonWidth);
+        ctx.closePath();
+        ctx.restore();
+    }
+
+    fire(){
+        this.loaded = false;
+        setTimeout(() => {
+            this.loaded = true;
+        }, this.reloadTime);
+
+        //Spawn projectile
+        let p = new Projectile(this.x, this.y, this.target.x, this.target.y, this.target);
+        p.turret = this;
+
+        //Sounds
+        let a = new Audio('/Sounds/M1.wav');
+        a.play();
+        objects.push(p);
+
+        //Check for negative angle
+        if (this.rotation < 0){
+            this.rotation += 360;
+        }
+
+        else if (this.rotation > 360){
+            this.rotation -= 360;
+        }
+        console.log(this.rotation);
+
     }
 }
 
@@ -146,7 +181,7 @@ class Target{
         this.x = x;
         this.y = y;
         this.r = 10;
-        this.hp = 3;
+        this.hp = 1;
     }
 
     draw(){
@@ -158,21 +193,21 @@ class Target{
     }
 }
 
-class Bullet{
+class Projectile{
     constructor(x,y, targetX, targetY, target){
         this.x = x;
         this.y = y;
         this.targetX = targetX;
         this.targetY = targetY;
         this.target = target;
-        this.speed = 15;
+        this.speed = 25;
         this.r = 2;
         this.distance = Math.sqrt( (x - targetX)*(x - targetX) + (y - targetY)*(y - targetY));
         this.normalizedX = (x-targetX)/ this.distance;
         this.normalizedY = (y-targetY)/ this.distance;
         this.dx = this.normalizedX * this.speed * -1;
         this.dy = this.normalizedY * this.speed * -1;
-        this.margin = 14;
+        this.margin = 30;
         this.selfDestructTimer = setTimeout(() => {
             this.selfDestruct();
         },2000);
@@ -236,6 +271,8 @@ canvas.addEventListener('click', e => {
     let t = new Target(e.clientX, e.clientY);
     objects.push(t);
     targets.push(t);
+    //console.log(getAngle(objects[0].x, objects[0].y, t.x, t.y));
+    
 });
 
 //Get the angle of two points
@@ -265,10 +302,19 @@ function draw(){
 function start(){
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
-    let turret = new Turret(500, 350);
+    let turret = new Turret(650, 350);
     objects.push(turret);
     draw();
 }
 //#endregion
 
-start();
+//start();
+setInterval(() => {
+
+    let x = Math.random() * canvas.width;
+    let y = Math.random() * canvas.height;
+    let t = new Target(x, y);
+    objects.push(t);
+    targets.push(t);
+
+}, 500);
