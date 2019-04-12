@@ -1,30 +1,40 @@
 //#region Global variables
 let canvas = document.getElementById('canvas');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
 let ctx = canvas.getContext('2d');
 const red = 'rgb(255, 70, 70)';
 const green = 'rgb(0, 175, 0)';
 const blue = 'rgb(0, 0, 255)';
 const black = 'rgb(20, 20, 20)';
 
+//Menu
+const menuX = canvas.width * 82 / 100;
+const menuY = canvas.height * 13 / 100;
+const menuW = canvas.width * 16 / 100;
+const menuH = canvas.height * 74 / 100;
+
+//Arrays
 let objects = [];
 let targets = [];
+
 //#endregion
 
 //#region Classes
 
-class Turret{
+class Tower{
     constructor(x, y){
         this.x = x;
         this.y = y;
-        this.r1 = 35;
-        this.r2 = 25;
-        this.cannonLength = 50;
-        this.cannonWidth = 6;
+        this.r1 = 23;
+        this.r2 = 17;
+        this.cannonLength = 30;
+        this.cannonWidth = 4;
         this.locked = false;
         this.loaded = true;
-        this.reloadTime = 50;
+        this.reloadTime = 300;
         this.rotation = 90;
-        this.rotationSpeed = 17;
+        this.rotationSpeed = 20;
     }
 
     draw(){
@@ -72,7 +82,7 @@ class Turret{
 
                 //#endregion
 
-                //The angle from the turret to the target
+                //The angle from the tower to the target
                 let angle = getAngle(this.x, this.y, t.x, t.y);
 
                 //#region Rotate cannon
@@ -107,6 +117,8 @@ class Turret{
                 if (Math.abs(this.rotation - angle) <= this.rotationSpeed){
                     this.locked = true;
                     this.target = t;
+                    this.target.attackers.push(this);
+                    this.fixRotation();
                 }
 
                 return;
@@ -114,7 +126,7 @@ class Turret{
 
             //Shoot the target
             if (this.locked && this.loaded){
-                this.fire();   
+                this.fire();
             }
         }
 
@@ -155,24 +167,25 @@ class Turret{
         }, this.reloadTime);
 
         //Spawn projectile
-        let p = new Projectile(this.x, this.y, this.target.x, this.target.y, this.target);
-        p.turret = this;
+        let p = new Projectile(this.x, this.y, this.target);
+        p.tower = this;
 
         //Sounds
         let a = new Audio('/Sounds/M1.wav');
-        a.play();
+        //a.play();
         objects.push(p);
+    }
 
+    fixRotation(){
         //Check for negative angle
         if (this.rotation < 0){
             this.rotation += 360;
         }
 
+        //Check for angle over 360
         else if (this.rotation > 360){
             this.rotation -= 360;
         }
-        console.log(this.rotation);
-
     }
 }
 
@@ -182,29 +195,36 @@ class Target{
         this.y = y;
         this.r = 10;
         this.hp = 1;
+        this.speed = 1;
+        this.attackers = [];
     }
 
     draw(){
+        this.move();
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.r, 0, Math.PI*2, false);
         ctx.fillStyle = red;
         ctx.fill();
         ctx.closePath();
     }
+
+    move(){
+        this.x += this.speed;
+    }
 }
 
 class Projectile{
-    constructor(x,y, targetX, targetY, target){
+    constructor(x,y, target){
         this.x = x;
         this.y = y;
-        this.targetX = targetX;
-        this.targetY = targetY;
         this.target = target;
+        this.targetX = target.x;
+        this.targetY = target.y;
         this.speed = 25;
         this.r = 2;
-        this.distance = Math.sqrt( (x - targetX)*(x - targetX) + (y - targetY)*(y - targetY));
-        this.normalizedX = (x-targetX)/ this.distance;
-        this.normalizedY = (y-targetY)/ this.distance;
+        this.distance = Math.sqrt((x - this.targetX)*(x - this.targetX) + (y - this.targetY)*(y - this.targetY));
+        this.normalizedX = (x-this.targetX)/ this.distance;
+        this.normalizedY = (y-this.targetY)/ this.distance;
         this.dx = this.normalizedX * this.speed * -1;
         this.dy = this.normalizedY * this.speed * -1;
         this.margin = 30;
@@ -250,7 +270,9 @@ class Projectile{
         if (target.hp <= 0){
             objects.splice(objects.indexOf(target), 1);
             targets.splice(targets.indexOf(target), 1);
-            this.turret.locked = false;
+            this.target.attackers.forEach(attacker => {
+                attacker.locked = false;
+            });
         }
 
         //Destroy 
@@ -266,13 +288,25 @@ class Projectile{
 
 //#region Helper Functions
 
+//Rounded rectangle
+CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
+    if (w < 2 * r) r = w / 2;
+    if (h < 2 * r) r = h / 2;
+    this.beginPath();
+    this.moveTo(x+r, y);
+    this.arcTo(x+w, y,   x+w, y+h, r);
+    this.arcTo(x+w, y+h, x,   y+h, r);
+    this.arcTo(x,   y+h, x,   y,   r);
+    this.arcTo(x,   y,   x+w, y,   r);
+    this.closePath();
+    return this;
+}
+
 //onClick listener
 canvas.addEventListener('click', e => {
     let t = new Target(e.clientX, e.clientY);
     objects.push(t);
     targets.push(t);
-    //console.log(getAngle(objects[0].x, objects[0].y, t.x, t.y));
-    
 });
 
 //Get the angle of two points
@@ -285,12 +319,15 @@ function getAngle(x1,y1, x2,y2){
 
 //Draw animation frame function, called every frame
 function draw(){
-
     requestAnimationFrame(draw);
     
-    //Draw green background
+    //Draw background
     ctx.fillStyle = 'rgb(95, 255, 95)';
     ctx.fillRect(0,0, canvas.width, canvas.height);
+
+    //Draw Menu
+    ctx.fillStyle = 'rgba(0, 128, 128, 0.6)';
+    ctx.roundRect(menuX, menuY, menuW, menuH, 15).fill();
 
     //Draw objects
     objects.forEach(obj => {
@@ -299,22 +336,26 @@ function draw(){
 }
 
 //Main method
-function start(){
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-    let turret = new Turret(650, 350);
-    objects.push(turret);
+function start(){    
+    let tower = new Tower(650, 350);
+    objects.push(tower);
     draw();
 }
-//#endregion
 
-//start();
-setInterval(() => {
+function sendWave(){
 
-    let x = Math.random() * canvas.width;
-    let y = Math.random() * canvas.height;
+    setInterval(() => {
+
+    let x = 10;
+    let y = Math.random() * (canvas.height - canvas.height*0.2) + canvas.height*0.1;
     let t = new Target(x, y);
     objects.push(t);
     targets.push(t);
 
-}, 500);
+    }, 700);
+}
+
+//#endregion
+
+start();
+sendWave();
