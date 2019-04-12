@@ -1,12 +1,11 @@
-//Initialize canvas
+//#region Global variables
 let canvas = document.getElementById('canvas');
 let ctx = canvas.getContext('2d');
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
 const red = 'rgb(255, 0, 0)';
 const black = 'rgb(0, 0, 0)';
 let objects = [];
 let targets = [];
+//#endregion
 
 //#region Classes
 
@@ -24,33 +23,49 @@ class Turret{
     }
 
     draw(){
-        //Inner circle
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.r1, 0, Math.PI*2, true);
-        ctx.fillStyle = 'rgb(35, 35, 35)';
-        ctx.fill();
-        ctx.closePath();
+        this.drawBody();
 
-        //Outer circle
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.r2, 0, Math.PI*2, true);
-        ctx.fillStyle = 'rgb(25, 25, 225)';
-        ctx.fill();
-        ctx.closePath();
-
-        //Cannon
+        //Draw cannon
         ctx.beginPath();
         ctx.fillStyle = black;
 
         //Calculate angle from turret to target
         if (targets.length > 0){
             
-            let t = targets[0];
+            //#region Choose nearest target
+
+            let bestDiff = 181;
+            let nearestTargetIndex = 0;
+            let t, diff;
+
+            //Loop through all targets and find the nearest target(that requires the least amount of rotation)
+            for (let i = 0; i < targets.length; i++){
+
+                t = targets[i];
+                let angle = getAngle(this.x, this.y, t.x, t.y);
+
+                //Calculate the difference between the current rotation and the target's angle
+                diff = Math.abs(this.rotation - angle);
+                
+                //If the difference between the current rotation and the new angle is > 180, subtract 360 from the difference
+                if (diff > 180){
+                    diff = Math.abs(diff - 360);
+                }
+
+                if (bestDiff > diff){
+                    bestDiff = diff;
+                    nearestTargetIndex = i;
+                }
+            }
+
+            t = targets[nearestTargetIndex];
+
+            //#endregion
 
             let angle = getAngle(this.x, this.y, t.x, t.y);
 
             //Rotate cannon
-            if (!this.locked && this.rotation != angle){
+            if (!this.locked){
 
                 //#region Rotation direction
                 //Avoid rotating more than 180deg at a time
@@ -87,7 +102,7 @@ class Turret{
             }
 
             //Shoot the target
-            else if (this.locked && this.loaded){
+            if (this.locked && this.loaded){
                 this.loaded = false;
                 setTimeout(() => {
                     this.loaded = true;
@@ -106,6 +121,23 @@ class Turret{
         ctx.fillRect(this.x, this.y, 45, 7.5);
         ctx.closePath();
         ctx.restore();
+    }
+
+    drawBody(){
+
+        //Inner circle
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.r1, 0, Math.PI*2, true);
+        ctx.fillStyle = 'rgb(35, 35, 35)';
+        ctx.fill();
+        ctx.closePath();
+
+        //Outer circle
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.r2, 0, Math.PI*2, true);
+        ctx.fillStyle = 'rgb(25, 25, 225)';
+        ctx.fill();
+        ctx.closePath();
     }
 }
 
@@ -140,6 +172,10 @@ class Bullet{
         this.normalizedY = (y-targetY)/ this.distance;
         this.dx = this.normalizedX * this.speed * -1;
         this.dy = this.normalizedY * this.speed * -1;
+        this.margin = 14;
+        this.selfDestructTimer = setTimeout(() => {
+            this.selfDestruct();
+        },2000);
     }
 
     draw(){
@@ -153,66 +189,66 @@ class Bullet{
         ctx.fill();
         ctx.closePath();
 
-        //Dx > 0, Dy > 0
-        
-        if (this.dx > 0 && this.dy > 0){
-
-            for (let i = 0; i < targets.length; i++){
-                let t = targets[i];
-                if (this.x >= t.x && this.y >= t.y){
-                    this.hit(t);
-                }
-            }
+        if (targets.length == 0){
+            return;
         }
 
-        //Dx < 0, Dy > 0
-        else if (this.dx < 0 && this.dy > 0){
-
-            for (let i = 0; i < targets.length; i++){
-                let t = targets[i];
-                if (this.x <= t.x && this.y >= t.y){
-                    this.hit(t);
-                }
-            }
-        }
-
-        //Dx > 0, Dy < 0
-        else if (this.dx > 0 && this.dy < 0){
-
-            for (let i = 0; i < targets.length; i++){
-                let t = targets[i];
-                if (this.x >= t.x && this.y <= t.y){
-                    this.hit(t);
-                }
-            }
-        }
-
-        //Dx < 0, Dy < 0
-        else{
-            for (let i = 0; i < targets.length; i++){
-                let t = targets[i];
-                if (this.x <= t.x && this.y <= t.y){
-                    this.hit(t);
-                }
+        //Hit detection
+        for (let i = 0; i < targets.length; i++){
+            let t = targets[i];
+            if (Math.abs(this.x - t.x) <= this.margin && Math.abs(this.y - t.y) <= this.margin){
+                this.hit(t);
+                return;
             }
         }
     }
-
+        
     hit(target){
-        objects.splice(objects.indexOf(this), 1);
+
+        //Stop self-destruction sequence
+        clearTimeout(this.selfDestructTimer);
+
+        //Damage target
         target.hp--;
+
         //Eliminate target
         if (target.hp <= 0){
             objects.splice(objects.indexOf(target), 1);
             targets.splice(targets.indexOf(target), 1);
             this.turret.locked = false;
         }
+
+        //Destroy 
+        this.selfDestruct();
+    }
+
+    selfDestruct(){
+        objects.splice(objects.indexOf(this), 1);
     }
 }
 
 //#endregion
 
+//#region Helper Functions
+
+//onClick listener
+canvas.addEventListener('click', e => {
+    let t = new Target(e.clientX, e.clientY);
+    objects.push(t);
+    targets.push(t);
+});
+
+//Get the angle of two points
+function getAngle(x1,y1, x2,y2){
+    let opposite = (y2-y1);
+    let adjacent = (x2-x1);
+    let angle = parseInt((Math.atan2(opposite, adjacent) * 180 / Math.PI).toFixed(0)) + 180;
+    return angle;
+}
+
+//Draw animation frame function, called every frame
 function draw(){
+
     requestAnimationFrame(draw);
     
     //Draw green background
@@ -225,23 +261,10 @@ function draw(){
     });
 }
 
-canvas.addEventListener('click', e => {
-    let t = new Target(e.screenX, e.screenY - 130);
-    objects.push(t);
-    targets.push(t);
-});
-
-//#region Helper Functions
-
-//Get the angle of two points
-function getAngle(x1,y1, x2,y2){
-    let opposite = (y2-y1);
-    let adjacent = (x2-x1);
-    let angle = parseInt((Math.atan2(opposite, adjacent) * 180 / Math.PI).toFixed(0)) + 180;
-    return angle;
-}
-
+//Main method
 function start(){
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
     let turret = new Turret(500, 350);
     objects.push(turret);
     draw();
