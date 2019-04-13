@@ -4,27 +4,34 @@ canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 let ctx = canvas.getContext('2d');
 const red = 'rgb(255, 70, 70)';
+const ared = 'rgba(255, 70, 70, 0.6)';
 const green = 'rgb(0, 175, 0)';
+const agreen = 'rgba(0, 175, 0, 0.6)';
 const blue = 'rgb(0, 0, 255)';
+const ablue = 'rgba(0, 0, 255, 0.6)';
 const black = 'rgb(20, 20, 20)';
+const ablack = 'rgba(20, 20, 20, 0.6)';
 
 //Menu
 const menuX = canvas.width * 82 / 100;
 const menuY = canvas.height * 13 / 100;
 const menuW = canvas.width * 16 / 100;
 const menuH = canvas.height * 74 / 100;
+const buttonSize = 50;
 
 //Cursors
 let currentCursor;
 let crosshair;
 let mouseX = canvas.width / 2;
 let mouseY = canvas.height / 2;
+let hoveredTurret = undefined;
 const cSize = 20;
 
 //Arrays
 let objects = [];
 let turrets = [];
 let targets = [];
+let buttons = [];
 
 //#endregion
 
@@ -40,12 +47,17 @@ class Turret{
         this.cannonWidth = 4;
         this.locked = false;
         this.loaded = true;
-        this.reloadTime = 300;
+        this.reloadTime = 1000;
         this.rotation = 90;
-        this.rotationSpeed = 20;
+        this.rotationSpeed = 1;
+        this.selected = false;
     }
 
     draw(){
+        if (this.selected){
+            this.x = mouseX;
+            this.y = mouseY;
+        }
         
         //Draw body
         this.drawBody();
@@ -56,6 +68,12 @@ class Turret{
 
         //If there are any targets
         if (targets.length > 0){
+
+            //If the target is being moved, return
+            if (this.selected){
+                this.drawCannon();
+                return;
+            }
 
             //Find a target
             if (!this.locked){
@@ -147,6 +165,9 @@ class Turret{
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.r1, 0, Math.PI*2, true);
         ctx.fillStyle = green;
+        if (this.selected){
+            ctx.fillStyle = agreen;
+        }
         ctx.fill();
         ctx.closePath();
 
@@ -154,6 +175,9 @@ class Turret{
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.r2, 0, Math.PI*2, true);
         ctx.fillStyle = red;
+        if (this.selected){
+            ctx.fillStyle = ared;
+        }
         ctx.fill();
         ctx.closePath();
     }
@@ -163,6 +187,10 @@ class Turret{
         ctx.translate(this.x, this.y);
         ctx.rotate((this.rotation - 180) * Math.PI/180);
         ctx.translate(this.x*-1, this.y*-1);
+        ctx.fillStyle = black;
+        if (this.selected){
+            ctx.fillStyle = ablack;
+        }
         ctx.fillRect(this.x, this.y, this.cannonLength, this.cannonWidth);
         ctx.closePath();
         ctx.restore();
@@ -201,7 +229,7 @@ class Target{
     constructor(x, y){
         this.x = x;
         this.y = y;
-        this.r = 10;
+        this.r = Math.random() * 14 + 6;
         this.hp = 1;
         this.speed = 1;
         this.attackers = [];
@@ -292,6 +320,24 @@ class Projectile{
     }
 }
 
+class Button{
+    constructor(x, y, execute){
+        this.x = x;
+        this.y = y;
+        this.size = buttonSize;
+        this.execute = execute;
+    }
+
+    draw(){
+        ctx.beginPath();
+        ctx.fillStyle = 'teal';
+        ctx.rect(this.x, this.y, 35, 35);
+        ctx.fill();
+        //ctx.roundRect(this.x, this.y, buttonSize, buttonSize, 15).fill();
+        ctx.closePath();
+    }
+}
+
 //#endregion
 
 //#region Helper Functions
@@ -313,20 +359,75 @@ CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
 //On mouse left-click
 canvas.addEventListener('click', e => {
 
-    //If crosshair is not active, do nothing
+    //#region Shop & Moving turrets
     if (currentCursor != 'crosshair'){
+
+        //If a turret is hovered
+        if (hoveredTurret){
+            
+
+            //Click to release the turret
+            if (hoveredTurret.selected){
+                hoveredTurret.selected = false;
+            }
+
+            //Click to move the turret
+            else{
+                hoveredTurret.selected = true;
+            }
+        }
+
+        //Shop / Upgrades
+        else{
+            
+            for(let i = 0; i < buttons.length; i++){
+                let b = buttons[i];
+                if ((e.clientX >= b.x && e.clientX <= b.x + b.size) && (e.clientY >= b.y && e.clientY <= b.y + b.size)){
+                    
+                    b.execute();
+                }
+            }
+        }
+
         return;
     }
 
-    //Shoot
-    let t = new Target(e.clientX, e.clientY);
-    objects.push(t);
-    targets.push(t);
+    //#endregion
+
+    //#region User shooting
+    let a = new Audio('/Sounds/M1.wav');
+    a.play();
+    for(let i = 0; i < targets.length; i++){
+        let t = targets[i];
+        let d = Math.sqrt((mouseX - t.x)*(mouseX - t.x) + (mouseY - t.y)*(mouseY - t.y));
+
+        //Collision
+        if (d <= t.r){
+            
+            //Damage target
+            t.hp--;
+
+            //Eliminate target
+            if (t.hp <= 0){
+                objects.splice(objects.indexOf(t), 1);
+                targets.splice(targets.indexOf(t), 1);
+                t.attackers.forEach(attacker => {
+                    attacker.locked = false;
+                });
+            }
+
+            return;
+        }
+    }
+
+    //#endregion
+
 });
 
 //On mouse move
 canvas.addEventListener('mousemove', e => {
 
+    hoveredTurret = undefined;
     mouseX = e.clientX;
     mouseY = e.clientY;
 
@@ -335,26 +436,25 @@ canvas.addEventListener('mousemove', e => {
     let insideMenuY = e.clientY >= menuY && e.clientY <= menuY + menuH;
     if (insideMenuX && insideMenuY){
         setCursor('pointer');
+        return;
     }
 
-    //Cursor is inside the field
-    else{
-        //Cursor is on a turret(Move)
-        for(let i = 0; i < turrets.length; i++){
-            let t = turrets[i];
-            let d = Math.sqrt((mouseX - t.x)*(mouseX - t.x) + (mouseY - t.y)*(mouseY - t.y));
+    //Cursor is on a turret(pointer)
+    for(let i = 0; i < turrets.length; i++){
+        let t = turrets[i];
+        let d = Math.sqrt((mouseX - t.x)*(mouseX - t.x) + (mouseY - t.y)*(mouseY - t.y));
 
-            //Collision
-            if (d <= t.r1){
-                setCursor('move');
-                return;
-            }
+        //Collision
+        if (d <= t.r1){
+            setCursor('pointer');
+            hoveredTurret = t;
+            return;
         }
+    }
 
-        //Cursor is in the field(Crosshair)
-        if (currentCursor != 'crosshair'){
-            setCursor('crosshair');
-        }
+    //Cursor is in the field(Crosshair)
+    if (currentCursor != 'crosshair'){
+        setCursor('crosshair');
     }
 });
 
@@ -374,10 +474,7 @@ function draw(){
     ctx.fillStyle = 'rgb(95, 255, 95)';
     ctx.fillRect(0,0, canvas.width, canvas.height);
 
-    //Draw Menu
-    ctx.fillStyle = 'rgba(0, 128, 128, 0.6)';
-    ctx.roundRect(menuX, menuY, menuW, menuH, 15).fill();
-    //ctx.beginPath();
+    drawMenu();
 
     //Draw objects
     objects.forEach(obj => {
@@ -390,6 +487,7 @@ function start(){
     let turret = new Turret(650, 350);
     objects.push(turret);
     turrets.push(turret);
+    drawButtons();
     draw();
 }
 
@@ -404,7 +502,7 @@ function sendWave(){
     objects.push(t);
     targets.push(t);
 
-    }, 700);
+    }, 1000);
 }
 
 //Change the cursor
@@ -435,13 +533,68 @@ function setCursor(type){
         currentCursor = 'pointer';
 
         break;
-        
-        //Move
-        case 'move':
-        canvas.style.cursor = 'move';
-        currentCursor = 'move';
-        break;
     }
+}
+
+//Menu (Info, Upgrades and shop)
+function drawMenu(){
+
+    //Menu outline
+    ctx.fillStyle = 'rgba(0, 128, 128, 0.6)';
+    ctx.beginPath();
+    ctx.roundRect(menuX, menuY, menuW, menuH, 15).fill();
+    ctx.closePath();
+
+    //Borders
+    let borderMargin = menuH / 3;
+
+    for (let i = 1; i <= 2; i++){
+        ctx.beginPath();
+        ctx.moveTo(menuX, menuY + borderMargin * i);
+        ctx.lineTo(menuX + menuW, menuY + borderMargin * i);
+        ctx.stroke();
+        ctx.closePath();
+    }
+}
+
+function drawButtons(){
+
+    function purchaseTurret(){
+        let x,y;
+
+        //Make sure no two turrets spawn on top of each other
+        outer:
+        while(true){
+            x = Math.random() * (canvas.width - menuW);
+            y = Math.random() * canvas.height;
+
+            for (let i = 0; i < turrets.length; i++){
+                let t = turrets[i];
+                let d = Math.sqrt((x - t.x)*(x - t.x) + (y - t.y)*(y - t.y));
+                if (d <= t.r1 * 3){
+                    continue outer;
+                }
+
+                if (i == turrets.length - 1){
+                    break outer;
+                }
+            }
+        }
+        let t = new Turret(x, y);
+        objects.push(t);
+        turrets.push(t);
+    }
+
+    //Borders
+    let borderMargin = menuH / 3;
+    let area1Y = (menuY * 2 + borderMargin) / 2;
+    let area2Y = (menuY + menuH) / 2;
+    let area3Y = area2Y + borderMargin;
+
+    //Purchase turret
+    let b = new Button((menuX * 2 + menuW) / 2, area1Y, purchaseTurret);
+    objects.push(b);
+    buttons.push(b);
 }
 
 //#endregion
