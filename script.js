@@ -14,15 +14,23 @@ const menuY = canvas.height * 13 / 100;
 const menuW = canvas.width * 16 / 100;
 const menuH = canvas.height * 74 / 100;
 
+//Cursors
+let currentCursor;
+let crosshair;
+let mouseX = canvas.width / 2;
+let mouseY = canvas.height / 2;
+const cSize = 20;
+
 //Arrays
 let objects = [];
+let turrets = [];
 let targets = [];
 
 //#endregion
 
 //#region Classes
 
-class Tower{
+class Turret{
     constructor(x, y){
         this.x = x;
         this.y = y;
@@ -82,7 +90,7 @@ class Tower{
 
                 //#endregion
 
-                //The angle from the tower to the target
+                //The angle from the turret to the target
                 let angle = getAngle(this.x, this.y, t.x, t.y);
 
                 //#region Rotate cannon
@@ -168,7 +176,7 @@ class Tower{
 
         //Spawn projectile
         let p = new Projectile(this.x, this.y, this.target);
-        p.tower = this;
+        p.turret = this;
 
         //Sounds
         let a = new Audio('/Sounds/M1.wav');
@@ -302,11 +310,52 @@ CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
     return this;
 }
 
-//onClick listener
+//On mouse left-click
 canvas.addEventListener('click', e => {
+
+    //If crosshair is not active, do nothing
+    if (currentCursor != 'crosshair'){
+        return;
+    }
+
+    //Shoot
     let t = new Target(e.clientX, e.clientY);
     objects.push(t);
     targets.push(t);
+});
+
+//On mouse move
+canvas.addEventListener('mousemove', e => {
+
+    mouseX = e.clientX;
+    mouseY = e.clientY;
+
+    //Cursor is inside the menu
+    let insideMenuX = e.clientX >= menuX && e.clientX <= menuX + menuW;
+    let insideMenuY = e.clientY >= menuY && e.clientY <= menuY + menuH;
+    if (insideMenuX && insideMenuY){
+        setCursor('pointer');
+    }
+
+    //Cursor is inside the field
+    else{
+        //Cursor is on a turret(Move)
+        for(let i = 0; i < turrets.length; i++){
+            let t = turrets[i];
+            let d = Math.sqrt((mouseX - t.x)*(mouseX - t.x) + (mouseY - t.y)*(mouseY - t.y));
+
+            //Collision
+            if (d <= t.r1){
+                setCursor('move');
+                return;
+            }
+        }
+
+        //Cursor is in the field(Crosshair)
+        if (currentCursor != 'crosshair'){
+            setCursor('crosshair');
+        }
+    }
 });
 
 //Get the angle of two points
@@ -328,6 +377,7 @@ function draw(){
     //Draw Menu
     ctx.fillStyle = 'rgba(0, 128, 128, 0.6)';
     ctx.roundRect(menuX, menuY, menuW, menuH, 15).fill();
+    //ctx.beginPath();
 
     //Draw objects
     objects.forEach(obj => {
@@ -337,11 +387,13 @@ function draw(){
 
 //Main method
 function start(){    
-    let tower = new Tower(650, 350);
-    objects.push(tower);
+    let turret = new Turret(650, 350);
+    objects.push(turret);
+    turrets.push(turret);
     draw();
 }
 
+//Spawns enemies
 function sendWave(){
 
     setInterval(() => {
@@ -353,6 +405,43 @@ function sendWave(){
     targets.push(t);
 
     }, 700);
+}
+
+//Change the cursor
+function setCursor(type){
+
+    //Turn crosshair off
+    if(currentCursor == 'crosshair'){
+        objects.splice(objects.indexOf(crosshair), 1);
+    }
+    
+    switch(type){
+
+        //Crosshair
+        case 'crosshair':
+        crosshair = new Image();
+        crosshair.src = '/Images/crosshair.png';
+        crosshair.draw = () => {
+            ctx.drawImage(crosshair, mouseX - cSize / 2, mouseY - cSize / 2, cSize, cSize);
+        };
+        objects.push(crosshair);
+        canvas.style.cursor = 'none';
+        currentCursor = 'crosshair';
+        break;
+
+        //Pointer
+        case 'pointer':
+        canvas.style.cursor = 'pointer';
+        currentCursor = 'pointer';
+
+        break;
+        
+        //Move
+        case 'move':
+        canvas.style.cursor = 'move';
+        currentCursor = 'move';
+        break;
+    }
 }
 
 //#endregion
