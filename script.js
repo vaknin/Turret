@@ -47,9 +47,9 @@ class Turret{
         this.cannonWidth = 4;
         this.locked = false;
         this.loaded = true;
-        this.reloadTime = 1000;
+        this.reloadTime = 300;
         this.rotation = 90;
-        this.rotationSpeed = 1;
+        this.rotationSpeed = 7;
         this.selected = false;
     }
 
@@ -62,9 +62,7 @@ class Turret{
         //Draw body
         this.drawBody();
 
-        //Draw cannon
-        ctx.beginPath();
-        ctx.fillStyle = black;
+        
 
         //If there are any targets
         if (targets.length > 0){
@@ -156,6 +154,9 @@ class Turret{
             }
         }
 
+        //Draw cannon
+        ctx.beginPath();
+        ctx.fillStyle = black;
         this.drawCannon();
     }
 
@@ -208,7 +209,7 @@ class Turret{
 
         //Sounds
         let a = new Audio('/Sounds/M1.wav');
-        //a.play();
+        a.play();
         objects.push(p);
     }
 
@@ -267,6 +268,7 @@ class Projectile{
         this.selfDestructTimer = setTimeout(() => {
             this.selfDestruct();
         },2000);
+        this.particles = 5;
     }
 
     draw(){
@@ -302,6 +304,14 @@ class Projectile{
         //Damage target
         target.hp--;
 
+        //Particles
+        for (let i = 0; i < this.particles; i++){
+            let modifierX = Math.random() * 0.5;
+            let modifierY = Math.random();
+            let p = new Particles(this.x, this.y, this.dx * -1 * modifierX, this.dy * -1 * modifierY);
+            objects.push(p);
+        }
+
         //Eliminate target
         if (target.hp <= 0){
             objects.splice(objects.indexOf(target), 1);
@@ -313,6 +323,34 @@ class Projectile{
 
         //Destroy 
         this.selfDestruct();
+    }
+
+    selfDestruct(){
+        objects.splice(objects.indexOf(this), 1);
+    }
+}
+
+class Particles{
+    constructor(x, y, dx, dy, r){
+        this.x = x;
+        this.y = y;
+        this.dx = dx;
+        this.dy = dy;
+        this.r = 2;
+        this.selfDestructTimer = setTimeout(() => {
+            this.selfDestruct();
+        },50);
+    }
+
+    draw(){
+        this.x += this.dx;
+        this.y += this.dy;
+
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.r, 0, Math.PI*2, true);
+        ctx.fillStyle = ablack;
+        ctx.fill();
+        ctx.closePath();
     }
 
     selfDestruct(){
@@ -333,7 +371,6 @@ class Button{
         ctx.fillStyle = 'teal';
         ctx.rect(this.x, this.y, 35, 35);
         ctx.fill();
-        //ctx.roundRect(this.x, this.y, buttonSize, buttonSize, 15).fill();
         ctx.closePath();
     }
 }
@@ -484,9 +521,6 @@ function draw(){
 
 //Main method
 function start(){    
-    let turret = new Turret(650, 350);
-    objects.push(turret);
-    turrets.push(turret);
     drawButtons();
     draw();
 }
@@ -502,7 +536,7 @@ function sendWave(){
     objects.push(t);
     targets.push(t);
 
-    }, 1000);
+    }, 200);
 }
 
 //Change the cursor
@@ -562,24 +596,28 @@ function drawButtons(){
     function purchaseTurret(){
         let x,y;
 
+        
         //Make sure no two turrets spawn on top of each other
-        outer:
-        while(true){
-            x = Math.random() * (canvas.width - menuW);
-            y = Math.random() * canvas.height;
-
-            for (let i = 0; i < turrets.length; i++){
-                let t = turrets[i];
-                let d = Math.sqrt((x - t.x)*(x - t.x) + (y - t.y)*(y - t.y));
-                if (d <= t.r1 * 3){
-                    continue outer;
-                }
-
-                if (i == turrets.length - 1){
-                    break outer;
+        if (turrets.length > 0){
+            outer:
+            while(true){
+                x = Math.random() * (canvas.width - menuW);
+                y = Math.random() * canvas.height;
+    
+                for (let i = 0; i < turrets.length; i++){
+                    let t = turrets[i];
+                    let d = Math.sqrt((x - t.x)*(x - t.x) + (y - t.y)*(y - t.y));
+                    if (d <= t.r1 * 3){
+                        continue outer;
+                    }
+    
+                    if (i == turrets.length - 1){
+                        break outer;
+                    }
                 }
             }
         }
+        
         let t = new Turret(x, y);
         objects.push(t);
         turrets.push(t);
