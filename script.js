@@ -12,10 +12,10 @@ const ablue = 'rgba(0, 0, 255, 0.6)';
 const black = 'rgb(20, 20, 20)';
 const ablack = 'rgba(20, 20, 20, 0.6)';
 
-//Menu
-const buttonsX = canvas.width * 0.95;
-const buttonsYmargin = canvas.height * 0.1;
-const buttonR = 30;
+//Buttons
+const buttonsX = canvas.width * 0.93;
+const buttonsYmargin = canvas.height * 0.07;
+const buttonSize = 60;
 
 //Turrets
 let mouseX = canvas.width / 2;
@@ -374,19 +374,18 @@ class Particles{
 }
 
 class Button{
-    constructor(x, y, execute){
+    constructor(x, y, src, execute){
         this.x = x;
         this.y = y;
-        this.r = buttonR;
+        this.size = buttonSize;
         this.execute = execute;
+        this.src = src;
     }
 
     draw(){
-        ctx.beginPath();
-        ctx.fillStyle = 'teal';
-        ctx.arc(this.x, this.y, this.r, 0, Math.PI*2, true);
-        ctx.fill();
-        ctx.closePath();
+        let img = new Image();
+        img.src = this.src;
+        ctx.drawImage(img, this.x, this.y, this.size, this.size);
     }
 }
 
@@ -411,12 +410,9 @@ CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
 //On mouse left-click
 canvas.addEventListener('click', e => {
 
+
     mouseX = e.clientX;
     mouseY = e.clientY;
-    if (hoveredTurret)
-    console.log(`held: ${hoveredTurret.held}, taken:${hoveredTurret.taken}`);
-    
-    
 
     //If a turret is hovered
     if (hoveredTurret){
@@ -444,10 +440,12 @@ canvas.addEventListener('click', e => {
             selectedTurret.selected = false;
         }
 
+        //Check mouse position and see if a button was pressed
         for(let i = 0; i < buttons.length; i++){
             let b = buttons[i];
-            let d = Math.sqrt((mouseX - b.x)*(mouseX - b.x) + (mouseY - b.y)*(mouseY - b.y));
-            if (d <= b.r){
+
+            //A button was pressed, execute the button's method
+            if ((mouseX >= b.x && mouseX <= b.x + b.size) && (mouseY >= b.y && mouseY <= b.y + b.size)){
                 b.execute();
             }
         }
@@ -487,6 +485,7 @@ canvas.addEventListener('mousemove', e => {
 
         //A turret is being placed, make sure not on top of another turret
         else{
+            //Don't account with collision with itself
             if (t == hoveredTurret){
                 continue;
             }
@@ -502,6 +501,22 @@ canvas.addEventListener('mousemove', e => {
         
     }
 
+    if (turrets.length == 0 || !hoveredTurret){
+        return;
+    }
+
+    //A turret is being placed, make sure not on top of a button
+    for (let i = 0; i < buttons.length; i++){
+
+        //The current turret we're checking
+        let b = buttons[i];
+
+        //A button was pressed, execute the button's method
+        if ((mouseX >= b.x && mouseX <= b.x + b.size) && (mouseY >= b.y && mouseY <= b.y + b.size)){
+            hoveredTurret.taken = true;
+            break;
+        }
+    }
 });
 
 //Get the angle between two points
@@ -517,7 +532,7 @@ function draw(){
     requestAnimationFrame(draw);
     
     //Draw background
-    ctx.fillStyle = 'rgb(95, 255, 95)';
+    ctx.fillStyle = 'teal';
     ctx.fillRect(0,0, canvas.width, canvas.height);
 
     //Draw objects
@@ -553,14 +568,14 @@ function drawButtons(){
 
         let t = new Turret(mouseX, mouseY);
         t.held = true;
+        t.taken = true;
         hoveredTurret = t;
-
         objects.push(t);
         turrets.push(t);
     }
 
     //Purchase turret
-    let b = new Button(buttonsX, buttonsYmargin * 2, purchaseTurret);
+    let b = new Button(buttonsX, buttonsYmargin * 2, './Images/btn_turret.png', purchaseTurret);
     objects.push(b);
     buttons.push(b);
 }
