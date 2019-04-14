@@ -13,19 +13,15 @@ const black = 'rgb(20, 20, 20)';
 const ablack = 'rgba(20, 20, 20, 0.6)';
 
 //Menu
-const menuX = canvas.width * 82 / 100;
-const menuY = canvas.height * 13 / 100;
-const menuW = canvas.width * 16 / 100;
-const menuH = canvas.height * 74 / 100;
-const buttonSize = 50;
+const buttonsX = canvas.width * 0.95;
+const buttonsYmargin = canvas.height * 0.1;
+const buttonR = 30;
 
-//Cursors
-let currentCursor;
-let crosshair;
+//Turrets
 let mouseX = canvas.width / 2;
 let mouseY = canvas.height / 2;
 let hoveredTurret = undefined;
-const cSize = 20;
+let selectedTurret = undefined;
 
 //Arrays
 let objects = [];
@@ -47,31 +43,27 @@ class Turret{
         this.cannonWidth = 4;
         this.locked = false;
         this.loaded = true;
-        this.reloadTime = 300;
+        this.reloadTime = 700;
         this.rotation = 90;
         this.rotationSpeed = 7;
         this.selected = false;
     }
 
     draw(){
-        if (this.selected){
+
+        if (this.held){
             this.x = mouseX;
             this.y = mouseY;
+            this.drawBody();
+            this.drawCannon();
+            return;
         }
         
         //Draw body
         this.drawBody();
 
-        
-
         //If there are any targets
         if (targets.length > 0){
-
-            //If the target is being moved, return
-            if (this.selected){
-                this.drawCannon();
-                return;
-            }
 
             //Find a target
             if (!this.locked){
@@ -155,19 +147,30 @@ class Turret{
         }
 
         //Draw cannon
-        ctx.beginPath();
-        ctx.fillStyle = black;
         this.drawCannon();
     }
 
     drawBody(){
 
+        //Selected circle
+        if (this.selected){
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.r1 * 1.1, 0, Math.PI*2, true);
+            ctx.fillStyle = ablue;
+            ctx.fill();
+            ctx.closePath();
+        }
+
         //Outer circle
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.r1, 0, Math.PI*2, true);
         ctx.fillStyle = green;
-        if (this.selected){
+        if (this.held){
             ctx.fillStyle = agreen;
+
+            if (this.taken){
+                ctx.fillStyle = ablack;
+            }
         }
         ctx.fill();
         ctx.closePath();
@@ -176,8 +179,11 @@ class Turret{
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.r2, 0, Math.PI*2, true);
         ctx.fillStyle = red;
-        if (this.selected){
+        if (this.held){
             ctx.fillStyle = ared;
+            if (this.taken){
+                ctx.fillStyle = ablack;
+            }
         }
         ctx.fill();
         ctx.closePath();
@@ -189,8 +195,11 @@ class Turret{
         ctx.rotate((this.rotation - 180) * Math.PI/180);
         ctx.translate(this.x*-1, this.y*-1);
         ctx.fillStyle = black;
-        if (this.selected){
+        if (this.held){
             ctx.fillStyle = ablack;
+            if (this.taken){
+                ctx.fillStyle = ablack;
+            }
         }
         ctx.fillRect(this.x, this.y, this.cannonLength, this.cannonWidth);
         ctx.closePath();
@@ -209,6 +218,7 @@ class Turret{
 
         //Sounds
         let a = new Audio('/Sounds/M1.wav');
+        a.volume = 0.35;
         a.play();
         objects.push(p);
     }
@@ -268,17 +278,16 @@ class Projectile{
         this.selfDestructTimer = setTimeout(() => {
             this.selfDestruct();
         },2000);
-        this.particles = 5;
+        this.particles = 4;
+        this.particleSpeedModifier = 0.4;
     }
 
     draw(){
 
-        this.x += this.dx;
-        this.y += this.dy;
-
+        this.move();
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.r, 0, Math.PI*2, true);
-        ctx.fillStyle = black;
+        ctx.fillStyle = 'rgb(0,0,0)';
         ctx.fill();
         ctx.closePath();
 
@@ -306,9 +315,10 @@ class Projectile{
 
         //Particles
         for (let i = 0; i < this.particles; i++){
-            let modifierX = Math.random() * 0.5;
-            let modifierY = Math.random();
-            let p = new Particles(this.x, this.y, this.dx * -1 * modifierX, this.dy * -1 * modifierY);
+            let modifierX = Math.random() * this.particleSpeedModifier;
+            let modifierY = Math.random() * this.particleSpeedModifier;
+            let r = Math.random() * 1.5 + 0.25;
+            let p = new Particles(this.x, this.y, this.dx * -1 * modifierX, this.dy * -1 * modifierY, r);
             objects.push(p);
         }
 
@@ -328,6 +338,11 @@ class Projectile{
     selfDestruct(){
         objects.splice(objects.indexOf(this), 1);
     }
+
+    move(){
+        this.x += this.dx;
+        this.y += this.dy;
+    }
 }
 
 class Particles{
@@ -336,10 +351,10 @@ class Particles{
         this.y = y;
         this.dx = dx;
         this.dy = dy;
-        this.r = 2;
+        this.r = r;
         this.selfDestructTimer = setTimeout(() => {
             this.selfDestruct();
-        },50);
+        },250);
     }
 
     draw(){
@@ -348,7 +363,7 @@ class Particles{
 
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.r, 0, Math.PI*2, true);
-        ctx.fillStyle = ablack;
+        ctx.fillStyle = 'rgb(0,0,0)';
         ctx.fill();
         ctx.closePath();
     }
@@ -362,14 +377,14 @@ class Button{
     constructor(x, y, execute){
         this.x = x;
         this.y = y;
-        this.size = buttonSize;
+        this.r = buttonR;
         this.execute = execute;
     }
 
     draw(){
         ctx.beginPath();
         ctx.fillStyle = 'teal';
-        ctx.rect(this.x, this.y, 35, 35);
+        ctx.arc(this.x, this.y, this.r, 0, Math.PI*2, true);
         ctx.fill();
         ctx.closePath();
     }
@@ -396,106 +411,100 @@ CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
 //On mouse left-click
 canvas.addEventListener('click', e => {
 
-    //#region Shop & Moving turrets
-    if (currentCursor != 'crosshair'){
+    mouseX = e.clientX;
+    mouseY = e.clientY;
+    if (hoveredTurret)
+    console.log(`held: ${hoveredTurret.held}, taken:${hoveredTurret.taken}`);
+    
+    
 
-        //If a turret is hovered
-        if (hoveredTurret){
-            
+    //If a turret is hovered
+    if (hoveredTurret){
 
-            //Click to release the turret
-            if (hoveredTurret.selected){
-                hoveredTurret.selected = false;
-            }
-
-            //Click to move the turret
-            else{
-                hoveredTurret.selected = true;
-            }
+        //Drop the purchased turret
+        if (hoveredTurret.held && !hoveredTurret.taken){
+            hoveredTurret.held = false;
         }
 
-        //Shop / Upgrades
-        else{
-            
-            for(let i = 0; i < buttons.length; i++){
-                let b = buttons[i];
-                if ((e.clientX >= b.x && e.clientX <= b.x + b.size) && (e.clientY >= b.y && e.clientY <= b.y + b.size)){
-                    
-                    b.execute();
-                }
-            }
+        //Unselect the turret
+        else if (hoveredTurret.selected){
+            selectTurret(false);
         }
 
-        return;
-    }
-
-    //#endregion
-
-    //#region User shooting
-    let a = new Audio('/Sounds/M1.wav');
-    a.play();
-    for(let i = 0; i < targets.length; i++){
-        let t = targets[i];
-        let d = Math.sqrt((mouseX - t.x)*(mouseX - t.x) + (mouseY - t.y)*(mouseY - t.y));
-
-        //Collision
-        if (d <= t.r){
-            
-            //Damage target
-            t.hp--;
-
-            //Eliminate target
-            if (t.hp <= 0){
-                objects.splice(objects.indexOf(t), 1);
-                targets.splice(targets.indexOf(t), 1);
-                t.attackers.forEach(attacker => {
-                    attacker.locked = false;
-                });
-            }
-
-            return;
+        //Select the turret
+        else if (!hoveredTurret.held){                
+            selectTurret(true);
         }
     }
 
-    //#endregion
+    //Shop / Upgrades
+    else{
 
+        if (selectedTurret){
+            selectedTurret.selected = false;
+        }
+
+        for(let i = 0; i < buttons.length; i++){
+            let b = buttons[i];
+            let d = Math.sqrt((mouseX - b.x)*(mouseX - b.x) + (mouseY - b.y)*(mouseY - b.y));
+            if (d <= b.r){
+                b.execute();
+            }
+        }
+    }
 });
 
 //On mouse move
 canvas.addEventListener('mousemove', e => {
 
-    hoveredTurret = undefined;
     mouseX = e.clientX;
     mouseY = e.clientY;
 
-    //Cursor is inside the menu
-    let insideMenuX = e.clientX >= menuX && e.clientX <= menuX + menuW;
-    let insideMenuY = e.clientY >= menuY && e.clientY <= menuY + menuH;
-    if (insideMenuX && insideMenuY){
-        setCursor('pointer');
-        return;
+    if (hoveredTurret && !hoveredTurret.held){
+        hoveredTurret = undefined;
     }
 
-    //Cursor is on a turret(pointer)
+    else if(hoveredTurret){
+        hoveredTurret.taken = false;
+    }
+
+    //Check whether the cursor is placed on a turret(assign 'hoveredTurret')
     for(let i = 0; i < turrets.length; i++){
+        
+        //The current turret we're checking
         let t = turrets[i];
+        //The distance between the cursor and t
         let d = Math.sqrt((mouseX - t.x)*(mouseX - t.x) + (mouseY - t.y)*(mouseY - t.y));
 
-        //Collision
-        if (d <= t.r1){
-            setCursor('pointer');
-            hoveredTurret = t;
-            return;
+        if (hoveredTurret == undefined){
+    
+            //Cursor is on a turret
+            if (d <= t.r1){
+                hoveredTurret = t;
+                break;
+            }
         }
+
+        //A turret is being placed, make sure not on top of another turret
+        else{
+            if (t == hoveredTurret){
+                continue;
+            }
+
+            else{
+                //Cannot spawn a turret here, already taken
+                if (d <= t.r1 * 2){
+                    hoveredTurret.taken = true;
+                    break;
+                }
+            }
+        }
+        
     }
 
-    //Cursor is in the field(Crosshair)
-    if (currentCursor != 'crosshair'){
-        setCursor('crosshair');
-    }
 });
 
-//Get the angle of two points
+//Get the angle between two points
 function getAngle(x1,y1, x2,y2){
     let opposite = (y2-y1);
     let adjacent = (x2-x1);
@@ -510,8 +519,6 @@ function draw(){
     //Draw background
     ctx.fillStyle = 'rgb(95, 255, 95)';
     ctx.fillRect(0,0, canvas.width, canvas.height);
-
-    drawMenu();
 
     //Draw objects
     objects.forEach(obj => {
@@ -536,103 +543,48 @@ function sendWave(){
     objects.push(t);
     targets.push(t);
 
-    }, 200);
+    }, 1000);
 }
 
-//Change the cursor
-function setCursor(type){
-
-    //Turn crosshair off
-    if(currentCursor == 'crosshair'){
-        objects.splice(objects.indexOf(crosshair), 1);
-    }
-    
-    switch(type){
-
-        //Crosshair
-        case 'crosshair':
-        crosshair = new Image();
-        crosshair.src = '/Images/crosshair.png';
-        crosshair.draw = () => {
-            ctx.drawImage(crosshair, mouseX - cSize / 2, mouseY - cSize / 2, cSize, cSize);
-        };
-        objects.push(crosshair);
-        canvas.style.cursor = 'none';
-        currentCursor = 'crosshair';
-        break;
-
-        //Pointer
-        case 'pointer':
-        canvas.style.cursor = 'pointer';
-        currentCursor = 'pointer';
-
-        break;
-    }
-}
-
-//Menu (Info, Upgrades and shop)
-function drawMenu(){
-
-    //Menu outline
-    ctx.fillStyle = 'rgba(0, 128, 128, 0.6)';
-    ctx.beginPath();
-    ctx.roundRect(menuX, menuY, menuW, menuH, 15).fill();
-    ctx.closePath();
-
-    //Borders
-    let borderMargin = menuH / 3;
-
-    for (let i = 1; i <= 2; i++){
-        ctx.beginPath();
-        ctx.moveTo(menuX, menuY + borderMargin * i);
-        ctx.lineTo(menuX + menuW, menuY + borderMargin * i);
-        ctx.stroke();
-        ctx.closePath();
-    }
-}
-
+//Shop buttons
 function drawButtons(){
 
     function purchaseTurret(){
-        let x,y;
 
-        
-        //Make sure no two turrets spawn on top of each other
-        if (turrets.length > 0){
-            outer:
-            while(true){
-                x = Math.random() * (canvas.width - menuW);
-                y = Math.random() * canvas.height;
-    
-                for (let i = 0; i < turrets.length; i++){
-                    let t = turrets[i];
-                    let d = Math.sqrt((x - t.x)*(x - t.x) + (y - t.y)*(y - t.y));
-                    if (d <= t.r1 * 3){
-                        continue outer;
-                    }
-    
-                    if (i == turrets.length - 1){
-                        break outer;
-                    }
-                }
-            }
-        }
-        
-        let t = new Turret(x, y);
+        let t = new Turret(mouseX, mouseY);
+        t.held = true;
+        hoveredTurret = t;
+
         objects.push(t);
         turrets.push(t);
     }
 
-    //Borders
-    let borderMargin = menuH / 3;
-    let area1Y = (menuY * 2 + borderMargin) / 2;
-    let area2Y = (menuY + menuH) / 2;
-    let area3Y = area2Y + borderMargin;
-
     //Purchase turret
-    let b = new Button((menuX * 2 + menuW) / 2, area1Y, purchaseTurret);
+    let b = new Button(buttonsX, buttonsYmargin * 2, purchaseTurret);
     objects.push(b);
     buttons.push(b);
+}
+
+//Selects a turret, used for fetching information and upgrading
+function selectTurret(state){
+
+    //Select a turret, show upgrades & info
+    if (state){
+
+        //A turret is already selected, diselect it
+        if (selectedTurret){
+            selectedTurret.selected = false;
+        }
+
+        //Select the new turret
+        selectedTurret = hoveredTurret;
+        selectedTurret.selected = true;
+    }
+
+    //Unselect the selected turret, hide info and upgrades
+    else{
+        selectedTurret.selected = false;
+    }
 }
 
 //#endregion
