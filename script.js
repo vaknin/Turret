@@ -3,6 +3,9 @@ let canvas = document.getElementById('canvas');
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 let ctx = canvas.getContext('2d');
+ctx.font = '22px Arial';
+
+//Colors
 const red = 'rgb(255, 70, 70)';
 const ared = 'rgba(255, 70, 70, 0.6)';
 const green = 'rgb(0, 175, 0)';
@@ -14,14 +17,27 @@ const ablack = 'rgba(20, 20, 20, 0.6)';
 
 //Buttons
 const buttonsX = canvas.width * 0.93;
-const buttonsYmargin = canvas.height * 0.07;
+const buttonsYmargin = canvas.height * 0.15;
 const buttonSize = 60;
+let currentButtons = 'shop';
 
 //Turrets
 let mouseX = canvas.width / 2;
 let mouseY = canvas.height / 2;
 let hoveredTurret = undefined;
 let selectedTurret = undefined;
+
+//Player stats
+const statsY = canvas.height * 0.075;
+const moneyX = canvas.width * 0.4;
+
+//Shop
+let money = 100;
+const turretPrice = 100;
+const fireRate1Price = 150;
+const fireRate2Price = 500;
+const damage1Price = 150;
+const damage2Price = 500;
 
 //Arrays
 let objects = [];
@@ -39,6 +55,7 @@ class Turret{
         this.y = y;
         this.r1 = 23;
         this.r2 = 17;
+        this.damage = 1;
         this.cannonLength = 30;
         this.cannonWidth = 4;
         this.locked = false;
@@ -47,6 +64,10 @@ class Turret{
         this.rotation = 90;
         this.rotationSpeed = 7;
         this.selected = false;
+        this.damageUpgradeLevel = 1;
+        this.fireRateLevel = 1;
+        this.damageUpgradeCost = 100;
+        this.fireRateUpgradeCost = 100;
     }
 
     draw(){
@@ -213,7 +234,7 @@ class Turret{
         }, this.reloadTime);
 
         //Spawn projectile
-        let p = new Projectile(this.x, this.y, this.target);
+        let p = new Projectile(this.x, this.y, this.target, this.damage);
         p.turret = this;
 
         //Sounds
@@ -237,12 +258,13 @@ class Turret{
 }
 
 class Target{
-    constructor(x, y){
+    constructor(x, y, reward){
         this.x = x;
         this.y = y;
         this.r = Math.random() * 14 + 6;
         this.hp = 1;
         this.speed = 1;
+        this.reward = reward;
         this.attackers = [];
     }
 
@@ -261,13 +283,14 @@ class Target{
 }
 
 class Projectile{
-    constructor(x,y, target){
+    constructor(x,y, target, damage){
         this.x = x;
         this.y = y;
         this.target = target;
         this.targetX = target.x;
         this.targetY = target.y;
         this.speed = 25;
+        this.damage = damage;
         this.r = 2;
         this.distance = Math.sqrt((x - this.targetX)*(x - this.targetX) + (y - this.targetY)*(y - this.targetY));
         this.normalizedX = (x-this.targetX)/ this.distance;
@@ -311,7 +334,7 @@ class Projectile{
         clearTimeout(this.selfDestructTimer);
 
         //Damage target
-        target.hp--;
+        target.hp -= this.damage;
 
         //Particles
         for (let i = 0; i < this.particles; i++){
@@ -329,6 +352,8 @@ class Projectile{
             this.target.attackers.forEach(attacker => {
                 attacker.locked = false;
             });
+
+            money += target.reward;
         }
 
         //Destroy 
@@ -374,18 +399,34 @@ class Particles{
 }
 
 class Button{
-    constructor(x, y, src, execute){
+    constructor(x, y, src, execute, price){
         this.x = x;
         this.y = y;
         this.size = buttonSize;
         this.execute = execute;
         this.src = src;
+        this.price = price;
     }
 
     draw(){
         let img = new Image();
         img.src = this.src;
+
+        if (this.hovered){
+            let src = [...this.src];
+            (src.splice(-4, 4));
+            src = src.join('');
+            src += '_hover.png';
+            img.src = src;
+        }
+
+        //Draw button
         ctx.drawImage(img, this.x, this.y, this.size, this.size);
+
+        //Draw price text
+        ctx.fillStyle = 'black';
+        ctx.font = '12px Arial';
+        ctx.fillText(this.price, this.x + 0.3* this.size, this.y + 0.3* this.size);
     }
 }
 
@@ -436,10 +477,6 @@ canvas.addEventListener('click', e => {
     //Shop / Upgrades
     else{
 
-        if (selectedTurret){
-            selectedTurret.selected = false;
-        }
-
         //Check mouse position and see if a button was pressed
         for(let i = 0; i < buttons.length; i++){
             let b = buttons[i];
@@ -447,7 +484,12 @@ canvas.addEventListener('click', e => {
             //A button was pressed, execute the button's method
             if ((mouseX >= b.x && mouseX <= b.x + b.size) && (mouseY >= b.y && mouseY <= b.y + b.size)){
                 b.execute();
+                return;
             }
+        }
+
+        if (selectedTurret){
+            selectTurret(false);
         }
     }
 });
@@ -458,6 +500,11 @@ canvas.addEventListener('mousemove', e => {
     mouseX = e.clientX;
     mouseY = e.clientY;
 
+    //Clear button hovers
+    buttons.forEach(b => {
+        b.hovered = false;
+    });
+
     if (hoveredTurret && !hoveredTurret.held){
         hoveredTurret = undefined;
     }
@@ -466,7 +513,7 @@ canvas.addEventListener('mousemove', e => {
         hoveredTurret.taken = false;
     }
 
-    //Check whether the cursor is placed on a turret(assign 'hoveredTurret')
+    //Check whether the cursor is placed on a turret(assign 'hoveredTurret') or a button
     for(let i = 0; i < turrets.length; i++){
         
         //The current turret we're checking
@@ -474,6 +521,7 @@ canvas.addEventListener('mousemove', e => {
         //The distance between the cursor and t
         let d = Math.sqrt((mouseX - t.x)*(mouseX - t.x) + (mouseY - t.y)*(mouseY - t.y));
 
+        //Assign the turret that the cursor is placed on as the hovered turret, and break the loop
         if (hoveredTurret == undefined){
     
             //Cursor is on a turret
@@ -501,20 +549,25 @@ canvas.addEventListener('mousemove', e => {
         
     }
 
-    if (turrets.length == 0 || !hoveredTurret){
-        return;
-    }
-
-    //A turret is being placed, make sure not on top of a button
     for (let i = 0; i < buttons.length; i++){
 
         //The current turret we're checking
         let b = buttons[i];
 
-        //A button was pressed, execute the button's method
+        //Is the cursor resting on a button?
         if ((mouseX >= b.x && mouseX <= b.x + b.size) && (mouseY >= b.y && mouseY <= b.y + b.size)){
-            hoveredTurret.taken = true;
-            break;
+
+            //A turret is being placed, make sure not on top of a button
+            if (hoveredTurret){
+                hoveredTurret.taken = true;
+                return;
+            }
+
+            //Check if hovering a button
+            else{
+                b.hovered = true;
+                return;
+            }
         }
     }
 });
@@ -539,11 +592,13 @@ function draw(){
     objects.forEach(obj => {
         obj.draw();
     });
+
+    drawText();
 }
 
 //Main method
-function start(){    
-    drawButtons();
+function start(){
+    createButtons('shop');
     draw();
 }
 
@@ -554,30 +609,12 @@ function sendWave(){
 
     let x = 10;
     let y = Math.random() * (canvas.height - canvas.height*0.2) + canvas.height*0.1;
-    let t = new Target(x, y);
+    let reward = 10;
+    let t = new Target(x, y, reward);
     objects.push(t);
     targets.push(t);
 
     }, 1000);
-}
-
-//Shop buttons
-function drawButtons(){
-
-    function purchaseTurret(){
-
-        let t = new Turret(mouseX, mouseY);
-        t.held = true;
-        t.taken = true;
-        hoveredTurret = t;
-        objects.push(t);
-        turrets.push(t);
-    }
-
-    //Purchase turret
-    let b = new Button(buttonsX, buttonsYmargin * 2, './Images/btn_turret.png', purchaseTurret);
-    objects.push(b);
-    buttons.push(b);
 }
 
 //Selects a turret, used for fetching information and upgrading
@@ -594,12 +631,123 @@ function selectTurret(state){
         //Select the new turret
         selectedTurret = hoveredTurret;
         selectedTurret.selected = true;
+        createButtons('upgrades');
     }
 
     //Unselect the selected turret, hide info and upgrades
     else{
         selectedTurret.selected = false;
+        createButtons('shop');
     }
+}
+
+//Toggles between shop and upgrades
+function createButtons(state){
+
+    function addButton(b){
+        objects.push(b);
+        buttons.push(b);
+    }
+
+    function purchaseTurret(){
+        let t = new Turret(mouseX, mouseY);
+        t.held = true;
+        t.taken = true;
+        hoveredTurret = t;
+        objects.push(t);
+        turrets.push(t);
+    }
+
+    function upgradeFireRate(){
+        if (selectedTurret.fireRateUpgradeCost <= money && selectedTurret.fireRateLevel <= 2){
+            money -= selectedTurret.fireRateUpgradeCost;
+            selectedTurret.fireRateLevel++;
+            selectedTurret.fireRateUpgradeCost *= 2;
+            selectedTurret.reloadTime *= 0.75;
+            createButtons('upgrades');
+            
+        }
+    }
+
+    function upgradeDamage(){
+        if (selectedTurret.damageUpgradeCost <= money && selectedTurret.damageUpgradeLevel <= 2){
+            money -= selectedTurret.damageUpgradeCost;
+            selectedTurret.damageUpgradeLevel++;
+            selectedTurret.damageUpgradeCost *= 2;
+            selectedTurret.damage++;
+            createButtons('upgrades');
+        }
+    }
+
+    //Erase all buttons
+    for (let i = 0; i < buttons.length; i++){
+        let b = buttons[i];
+        objects.splice(objects.indexOf(b), 1);
+    }
+    buttons = [];
+
+    //Draw the needed buttons (Shop/Upgrades)
+    switch(state){
+
+        //#region Shop
+        case 'shop':
+        currentButtons = 'shop';
+
+        //Purchase turret button
+        let b = new Button(buttonsX, buttonsYmargin * (buttons.length + 2), './images/buttons/btn_turret.png', purchaseTurret, turretPrice);
+        addButton(b);
+        break;
+
+        //#endregion
+
+        //#region Upgrades
+        case 'upgrades':
+        currentButtons = 'upgrades';
+        let level, price;
+
+        //Upgrade Fire Rate
+        level = selectedTurret.fireRateLevel;
+        if (level <= 2){
+            if (level == 1){
+                price = fireRate1Price;
+            }
+
+            else{
+                price = fireRate2Price
+            }
+            let b1 = new Button(buttonsX, buttonsYmargin * (buttons.length + 2), `./images/buttons/btn_firerate${level}.png`, upgradeFireRate, price);
+            addButton(b1);
+        }
+        
+
+        //Upgrade damage
+        level = selectedTurret.damageUpgradeLevel;
+        if (level <= 2){
+            if (level == 1){
+                price = damage1Price;
+            }
+
+            else{
+                price = damage2Price
+            }
+            let b2 = new Button(buttonsX, buttonsYmargin * (buttons.length + 2), `./images/buttons/btn_damage${level}.png`, upgradeDamage, price);
+            addButton(b2);
+        }
+
+        break;
+
+        //#endregion
+
+    }
+}
+
+//Money, enemies alive
+function drawText(){ // TOdo
+
+    //Money
+    ctx.fillStyle = 'black';
+    ctx.font = '22px Arial';
+    ctx.fillText(`${money}$`, moneyX, statsY);
 }
 
 //#endregion
