@@ -90,32 +90,22 @@ class Turret{
             if (!this.locked){
 
                 //#region Choose target
-
-                let bestDiff = 181;
-                let nearestTargetIndex = 0;
-                let t, diff;
+                
+                let t;
+                let largestX = 0;
+                let index = 0;
 
                 //Loop through all targets and find the nearest target(that requires the least amount of rotation)
                 for (let i = 0; i < targets.length; i++){
 
                     t = targets[i];
-                    let angle = getAngle(this.x, this.y, t.x, t.y);
-
-                    //Calculate the difference between the current rotation and the target's angle
-                    diff = Math.abs(this.rotation - angle);
-                    
-                    //If the difference between the current rotation and the new angle is > 180, subtract 360 from the difference
-                    if (diff > 180){
-                        diff = Math.abs(diff - 360);
-                    }
-
-                    if (bestDiff > diff){
-                        bestDiff = diff;
-                        nearestTargetIndex = i;
+                    if (t.x > largestX){
+                        largestX = t.x;
+                        index = i;
                     }
                 }
 
-                t = targets[nearestTargetIndex];
+                t = targets[index];
 
                 //#endregion
 
@@ -257,14 +247,15 @@ class Turret{
     }
 }
 
-class Target{
-    constructor(x, y, reward){
+class Enemy{
+    constructor(x, y){
         this.x = x;
         this.y = y;
-        this.r = Math.random() * 14 + 6;
-        this.hp = 1;
+        this.r = 10;
+        this.hp = 0;
         this.speed = 1;
-        this.reward = reward;
+        this.reward = 0;
+        this.color = black;
         this.attackers = [];
     }
 
@@ -272,7 +263,7 @@ class Target{
         this.move();
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.r, 0, Math.PI*2, false);
-        ctx.fillStyle = red;
+        ctx.fillStyle = this.color;
         ctx.fill();
         ctx.closePath();
     }
@@ -500,20 +491,22 @@ canvas.addEventListener('mousemove', e => {
     mouseX = e.clientX;
     mouseY = e.clientY;
 
-    //Clear button hovers
+    //Clear button hovers every frame
     buttons.forEach(b => {
         b.hovered = false;
     });
 
+    //Clear turret hovers every frame
     if (hoveredTurret && !hoveredTurret.held){
         hoveredTurret = undefined;
     }
 
+    //Clear turret being 'taken'
     else if(hoveredTurret){
         hoveredTurret.taken = false;
     }
 
-    //Check whether the cursor is placed on a turret(assign 'hoveredTurret') or a button
+    //#region Check whether a turret is being hovered
     for(let i = 0; i < turrets.length; i++){
         
         //The current turret we're checking
@@ -549,9 +542,18 @@ canvas.addEventListener('mousemove', e => {
         
     }
 
+    //#endregion
+
+    //#region Check whether a button is being hovered
+
+    //If the mouse is on the left side on the screen, no need to check for button hovers
+    if (mouseX < buttonsX){
+        return;
+    }
+
     for (let i = 0; i < buttons.length; i++){
 
-        //The current turret we're checking
+        //The current button we're checking
         let b = buttons[i];
 
         //Is the cursor resting on a button?
@@ -570,6 +572,9 @@ canvas.addEventListener('mousemove', e => {
             }
         }
     }
+
+    //#endregion
+
 });
 
 //Get the angle between two points
@@ -609,10 +614,37 @@ function sendWave(){
 
     let x = 10;
     let y = Math.random() * (canvas.height - canvas.height*0.2) + canvas.height*0.1;
-    let reward = 10;
-    let t = new Target(x, y, reward);
-    objects.push(t);
-    targets.push(t);
+
+    let e = new Enemy(x, y);
+
+    //#region Set enemy's attributes
+
+    //Generate a random number between 1-100
+    let r = Math.round(Math.random() * 99 + 1);
+
+    //Regular enemies - 70% chance
+    if (r <= 70){
+        addAttributes(e, 'regular');
+    }
+
+    //Small enemies - 15% chance
+    else if(r > 70 && r <= 85){
+        addAttributes(e, 'small');
+    }
+
+    //Big enemies - 10% chance
+    else if(r > 85 && r <= 95){
+        addAttributes(e, 'big');
+    }
+
+    else{
+        addAttributes(e, 'huge');
+    }
+
+    //#endregion
+
+    objects.push(e);
+    targets.push(e);
 
     }, 1000);
 }
@@ -748,6 +780,48 @@ function drawText(){ // TOdo
     ctx.fillStyle = 'black';
     ctx.font = '22px Arial';
     ctx.fillText(`${money}$`, moneyX, statsY);
+}
+
+//Change an enemy's attributes
+function addAttributes(e, type){
+    switch (type){
+
+        //Regular enemies
+        case 'regular':
+        e.hp = 2;
+        e.speed = 1;
+        e.reward = 10;
+        e.color = 'black';
+        e.r = 20;
+        break;
+
+        //Small enemies
+        case 'small':
+        e.hp = 1;
+        e.speed = 2.5;
+        e.reward = 5;
+        e.color = 'red';
+        e.r = 10;
+        break;
+
+        //Big enemies
+        case 'big':
+        e.hp = 5;
+        e.speed = 0.5;
+        e.reward = 20;
+        e.color = 'green';
+        e.r = 35;
+        break;
+
+        //Huge enemies
+        case 'huge':
+        e.hp = 10;
+        e.speed = 1;
+        e.reward = 10;
+        e.color = 'blue';
+        e.r = 55;
+        break;
+    }
 }
 
 //#endregion
