@@ -32,17 +32,34 @@ const statsY = canvas.height * 0.075;
 const moneyX = canvas.width * 0.4;
 
 //Shop
-let money = 100;
+let money = 2000;
 const turretPrice = 100;
 const fireRate1Price = 150;
-const fireRate2Price = 500;
+const fireRate2Price = 400;
+const fireRate3Price = 750;
 const damage1Price = 150;
-const damage2Price = 500;
+const damage2Price = 400;
+const damage3Price = 750;
+
+//Enemies
+const cp1X = 0;
+const cp1Y = canvas.height / 2;
+let cp1 = [cp1X, cp1Y];
+
+const cp2X = canvas.width / 2;
+const cp2Y = canvas.height * 0.25;
+let cp2 = [cp2X, cp2Y];
+
+const cp3X = canvas.width;
+const cp3Y = cp1Y;
+let cp3 = [cp3X, cp3Y];
+
+let checkpoints = [cp1, cp2, cp3];
 
 //Arrays
 let objects = [];
 let turrets = [];
-let targets = [];
+let enemies = [];
 let buttons = [];
 
 //#endregion
@@ -83,8 +100,8 @@ class Turret{
         //Draw body
         this.drawBody();
 
-        //If there are any targets
-        if (targets.length > 0){
+        //If there are any enemies
+        if (enemies.length > 0){
 
             //Find a target
             if (!this.locked){
@@ -95,17 +112,17 @@ class Turret{
                 let largestX = 0;
                 let index = 0;
 
-                //Loop through all targets and find the nearest target(that requires the least amount of rotation)
-                for (let i = 0; i < targets.length; i++){
+                //Loop through all enemies and find the nearest target(that requires the least amount of rotation)
+                for (let i = 0; i < enemies.length; i++){
 
-                    t = targets[i];
+                    t = enemies[i];
                     if (t.x > largestX){
                         largestX = t.x;
                         index = i;
                     }
                 }
 
-                t = targets[index];
+                t = enemies[index];
 
                 //#endregion
 
@@ -228,7 +245,7 @@ class Turret{
         p.turret = this;
 
         //Sounds
-        let a = new Audio('/Sounds/M1.wav');
+        let a = new Audio('/Sounds/Pew.wav');
         a.volume = 0.35;
         a.play();
         objects.push(p);
@@ -253,10 +270,19 @@ class Enemy{
         this.y = y;
         this.r = 10;
         this.hp = 0;
-        this.speed = 1;
+        this.speed = 5;
         this.reward = 0;
         this.color = black;
         this.attackers = [];
+        this.checkpoint = 1;
+
+        this.targetX = checkpoints[this.checkpoint][0];
+        this.targetY = checkpoints[this.checkpoint][1];
+        this.distance = Math.sqrt((this.x - this.targetX)*(this.x - this.targetX) + (this.y - this.targetY)*(this.y - this.targetY));
+        this.normalizedX = (this.x-this.targetX)/ this.distance;
+        this.normalizedY = (this.y-this.targetY)/ this.distance;
+        this.dx = this.normalizedX * this.speed * -1;
+        this.dy = this.normalizedY * this.speed * -1;
     }
 
     draw(){
@@ -269,7 +295,32 @@ class Enemy{
     }
 
     move(){
-        this.x += this.speed;
+
+        let d = Math.sqrt((this.x - this.targetX)*(this.x - this.targetX) + (this.y - this.targetY)*(this.y - this.targetY));
+        if (d <= this.speed * 6){
+            this.changeCheckpoint();
+        }
+
+        this.x += this.dx;
+        this.y += this.dy;
+    }
+
+    changeCheckpoint(){
+
+        this.checkpoint++;
+        if (this.checkpoint == checkpoints.length){
+            objects.splice(objects.indexOf(this), 1);
+            enemies.splice(objects.indexOf(this), 1);
+            return;
+        }
+        
+        this.targetX = checkpoints[this.checkpoint][0];
+        this.targetY = checkpoints[this.checkpoint][1];
+        this.distance = Math.sqrt((this.x - this.targetX)*(this.x - this.targetX) + (this.y - this.targetY)*(this.y - this.targetY));
+        this.normalizedX = (this.x-this.targetX)/ this.distance;
+        this.normalizedY = (this.y-this.targetY)/ this.distance;
+        this.dx = this.normalizedX * this.speed * -1;
+        this.dy = this.normalizedY * this.speed * -1;
     }
 }
 
@@ -305,13 +356,13 @@ class Projectile{
         ctx.fill();
         ctx.closePath();
 
-        if (targets.length == 0){
+        if (enemies.length == 0){
             return;
         }
 
         //Hit detection
-        for (let i = 0; i < targets.length; i++){
-            let t = targets[i];
+        for (let i = 0; i < enemies.length; i++){
+            let t = enemies[i];
             if (Math.abs(this.x - t.x) <= this.margin && Math.abs(this.y - t.y) <= this.margin){
                 this.hit(t);
                 return;
@@ -339,7 +390,7 @@ class Projectile{
         //Eliminate target
         if (target.hp <= 0){
             objects.splice(objects.indexOf(target), 1);
-            targets.splice(targets.indexOf(target), 1);
+            enemies.splice(enemies.indexOf(target), 1);
             this.target.attackers.forEach(attacker => {
                 attacker.locked = false;
             });
@@ -374,6 +425,7 @@ class Particles{
     }
 
     draw(){
+        
         this.x += this.dx;
         this.y += this.dy;
 
@@ -587,11 +639,15 @@ function getAngle(x1,y1, x2,y2){
 
 //Draw animation frame function, called every frame
 function draw(){
+
     requestAnimationFrame(draw);
     
     //Draw background
     ctx.fillStyle = 'teal';
     ctx.fillRect(0,0, canvas.width, canvas.height);
+
+    //Draw map
+    createMap();
 
     //Draw objects
     objects.forEach(obj => {
@@ -612,10 +668,7 @@ function sendWave(){
 
     setInterval(() => {
 
-    let x = 10;
-    let y = Math.random() * (canvas.height - canvas.height*0.2) + canvas.height*0.1;
-
-    let e = new Enemy(x, y);
+    let e = new Enemy(cp1X, cp1Y);
 
     //#region Set enemy's attributes
 
@@ -644,7 +697,7 @@ function sendWave(){
     //#endregion
 
     objects.push(e);
-    targets.push(e);
+    enemies.push(e);
 
     }, 1000);
 }
@@ -682,40 +735,43 @@ function createButtons(state){
     }
 
     function purchaseTurret(){
-        let t = new Turret(mouseX, mouseY);
-        t.held = true;
-        t.taken = true;
-        hoveredTurret = t;
-        objects.push(t);
-        turrets.push(t);
+        if (money >= turretPrice){
+            money -= turretPrice;
+            let t = new Turret(mouseX, mouseY);
+            t.held = true;
+            t.taken = true;
+            hoveredTurret = t;
+            objects.push(t);
+            turrets.push(t);
+        }
     }
 
-    function upgradeFireRate(){
-        if (selectedTurret.fireRateUpgradeCost <= money && selectedTurret.fireRateLevel <= 2){
-            money -= selectedTurret.fireRateUpgradeCost;
+    function upgradeFireRate(price){
+
+        if (money >= price){
+            money -= price;
             selectedTurret.fireRateLevel++;
-            selectedTurret.fireRateUpgradeCost *= 2;
             selectedTurret.reloadTime *= 0.75;
-            createButtons('upgrades');
-            
         }
+
+        createButtons('upgrades');
     }
 
-    function upgradeDamage(){
-        if (selectedTurret.damageUpgradeCost <= money && selectedTurret.damageUpgradeLevel <= 2){
-            money -= selectedTurret.damageUpgradeCost;
+    function upgradeDamage(price){
+
+        if (money >= price){
+            money -= price;
             selectedTurret.damageUpgradeLevel++;
-            selectedTurret.damageUpgradeCost *= 2;
             selectedTurret.damage++;
-            createButtons('upgrades');
         }
+
+        createButtons('upgrades');
     }
 
     //Erase all buttons
-    for (let i = 0; i < buttons.length; i++){
-        let b = buttons[i];
+    buttons.forEach(b => {
         objects.splice(objects.indexOf(b), 1);
-    }
+    });
     buttons = [];
 
     //Draw the needed buttons (Shop/Upgrades)
@@ -735,34 +791,43 @@ function createButtons(state){
         //#region Upgrades
         case 'upgrades':
         currentButtons = 'upgrades';
-        let level, price;
+        let level1, level2, price1, price2;
 
         //Upgrade Fire Rate
-        level = selectedTurret.fireRateLevel;
-        if (level <= 2){
-            if (level == 1){
-                price = fireRate1Price;
+        level1 = selectedTurret.fireRateLevel;
+        if (level1 <= 3){
+            if (level1 == 1){
+                price1 = fireRate1Price;
+            }
+
+            else if (level1 == 2){
+                price1 = fireRate2Price;
             }
 
             else{
-                price = fireRate2Price
+                price1 = fireRate3Price;
             }
-            let b1 = new Button(buttonsX, buttonsYmargin * (buttons.length + 2), `./images/buttons/btn_firerate${level}.png`, upgradeFireRate, price);
+            
+            let b1 = new Button(buttonsX, buttonsYmargin * (buttons.length + 2), `./images/buttons/btn_firerate${level1}.png`, () => {upgradeFireRate(price1)}, price1);
+            
             addButton(b1);
         }
         
-
         //Upgrade damage
-        level = selectedTurret.damageUpgradeLevel;
-        if (level <= 2){
-            if (level == 1){
-                price = damage1Price;
+        level2 = selectedTurret.damageUpgradeLevel;
+        if (level2 <= 3){
+            if (level2 == 1){
+                price2 = damage1Price;
+            }
+
+            else if (level2 == 2){
+                price2 = damage2Price;
             }
 
             else{
-                price = damage2Price
+                price2 = damage3Price;
             }
-            let b2 = new Button(buttonsX, buttonsYmargin * (buttons.length + 2), `./images/buttons/btn_damage${level}.png`, upgradeDamage, price);
+            let b2 = new Button(buttonsX, buttonsYmargin * (buttons.length + 2), `./images/buttons/btn_damage${level2}.png`, () => {upgradeDamage(price2)}, price2);
             addButton(b2);
         }
 
@@ -821,6 +886,19 @@ function addAttributes(e, type){
         e.color = 'blue';
         e.r = 55;
         break;
+    }
+}
+
+//Create map
+function createMap(){
+
+    for (let i = 0; i < checkpoints.length - 1; i++){
+        
+        ctx.beginPath();
+        ctx.moveTo(checkpoints[i][0], checkpoints[i][1]);
+        ctx.lineTo(checkpoints[i+1][0], checkpoints[i+1][1]);
+        ctx.stroke();
+        ctx.closePath();
     }
 }
 
