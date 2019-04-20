@@ -27,12 +27,7 @@ let mouseY = canvas.height / 2;
 let hoveredTurret = undefined;
 let selectedTurret = undefined;
 
-//Player stats
-const statsY = canvas.height * 0.075;
-const moneyX = canvas.width * 0.4;
-
 //Shop
-let money = 2000;
 const turretPrice = 100;
 const fireRate1Price = 150;
 const fireRate2Price = 400;
@@ -40,6 +35,13 @@ const fireRate3Price = 750;
 const damage1Price = 150;
 const damage2Price = 400;
 const damage3Price = 750;
+
+//Player info
+let lives = 20;
+let money = 2000;
+const statsY = canvas.height * 0.075;
+const livesX = canvas.width * 0.05;
+const moneyX = canvas.width * 0.25;
 
 //Checkpoints
 let checkpoints = [];
@@ -61,13 +63,14 @@ class Turret{
         this.r1 = 23;
         this.r2 = 17;
         this.damage = 1;
+        this.range = 100;
         this.cannonLength = 30;
         this.cannonWidth = 4;
         this.locked = false;
         this.loaded = true;
-        this.reloadTime = 700;
+        this.reloadTime = 650;
         this.rotation = 0;
-        this.rotationSpeed = 5;
+        this.rotationSpeed = 15;
         this.selected = false;
         this.damageUpgradeLevel = 1;
         this.fireRateLevel = 1;
@@ -95,18 +98,25 @@ class Turret{
 
             //#region Choose target
             
-            let t;
+            let t, d;
             let largestX = 0;
-            let index = 0;
+            let index = -1;
 
             //Loop through all enemies and find the nearest target(that requires the least amount of rotation)
             for (let i = 0; i < enemies.length; i++){
 
                 t = enemies[i];
-                if (t.x > largestX){
+                d = Math.sqrt((this.x - t.x)*(this.x - t.x) + (this.y - t.y)*(this.y - t.y));
+                
+                if (d <= this.range && t.x > largestX){
                     largestX = t.x;
                     index = i;
                 }
+            }
+
+            if (index == -1){
+                this.drawCannon();
+                return;
             }
 
             t = enemies[index];
@@ -119,9 +129,11 @@ class Turret{
 
             //#region Rotate cannon
 
-            //If an enemy is on sights, and there's a round loaded, shoot
+            //Fire
             if (diff <= this.rotationSpeed){
-                if (this.loaded){
+
+                let d = Math.sqrt((this.x - t.x)*(this.x - t.x) + (this.y - t.y)*(this.y - t.y));
+                if (this.loaded && d <= this.range){
                     this.fire(t);
                 }
             }
@@ -157,10 +169,10 @@ class Turret{
     drawBody(){
 
         //Selected circle
-        if (this.selected){
+        if (this.selected || this.held){
             ctx.beginPath();
-            ctx.arc(this.x, this.y, this.r1 * 1.1, 0, Math.PI*2, true);
-            ctx.fillStyle = ablue;
+            ctx.arc(this.x, this.y, this.range, 0, Math.PI*2, true);
+            ctx.fillStyle = 'rgba(0,0,0,0.3)';
             ctx.fill();
             ctx.closePath();
         }
@@ -281,6 +293,12 @@ class Enemy{
         //If reached the end, dissapear
         if (this.checkpoint == checkpoints.length){
             this.die();
+            lives--;
+
+            //Game over
+            if (lives < 0){
+                window.location.reload();
+            }
             return;
         }
         
@@ -329,8 +347,8 @@ class Projectile{
         this.selfDestructTimer = setTimeout(() => {
             this.selfDestruct();
         },2000);
-        this.particles = 8;
-        this.particleSpeedModifier = 0.3;
+        this.particles = 6;
+        this.particleSpeedModifier = 4;
     }
 
     draw(){
@@ -370,7 +388,7 @@ class Projectile{
         if (target.hp <= 0){
             target.die();
             money += target.reward;
-            this.particles *= 6;
+            this.particles *= 7;
         }
 
         //Particles
@@ -380,7 +398,8 @@ class Projectile{
             let modifierX = Math.random() * this.particleSpeedModifier * negative1;
             let modifierY = Math.random() * this.particleSpeedModifier * negative2;
             let r = Math.random() * 1.5 + 0.25;
-            let p = new Particles(target.x, target.y, this.dx * -1 * modifierX, this.dy * -1 * modifierY, r);
+            let p = new Particles(target.x, target.y, modifierX, modifierY, r, target.color);
+            //let p = new Particles(target.x, target.y, this.dx * -1 * modifierX, this.dy * -1 * modifierY, r, target.color);
             objects.push(p);
         }
 
@@ -403,12 +422,13 @@ class Projectile{
 }
 
 class Particles{
-    constructor(x, y, dx, dy, r){
+    constructor(x, y, dx, dy, r, color){
         this.x = x;
         this.y = y;
         this.dx = dx;
         this.dy = dy;
         this.r = r;
+        this.color = color;
         this.selfDestructTimer = setTimeout(() => {
             this.selfDestruct();
         },250);
@@ -421,7 +441,7 @@ class Particles{
 
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.r, 0, Math.PI*2, true);
-        ctx.fillStyle = 'rgb(255,0,0)';
+        ctx.fillStyle = this.color;
         ctx.fill();
         ctx.closePath();
     }
@@ -612,6 +632,16 @@ canvas.addEventListener('mousemove', e => {
                 b.hovered = true;
                 return;
             }
+        }
+    }
+
+    //#endregion
+
+    //#region Check whether the map is being hovered
+
+    if (hoveredTurret && hoveredTurret.held){
+        for (let i = 0; i < checkpoints; i++){
+            
         }
     }
 
@@ -845,13 +875,18 @@ function createButtons(state){
     }
 }
 
-//Money, enemies alive
+//Text manager
 function drawText(){
 
-    //Money
+    //Current money
     ctx.fillStyle = 'black';
     ctx.font = '22px Arial';
     ctx.fillText(`${money}$`, moneyX, statsY);
+
+    //Current lives
+    ctx.fillStyle = 'black';
+    ctx.font = '22px Arial';
+    ctx.fillText('Lives: ' + lives, livesX, statsY);
 }
 
 //Change an enemy's attributes
@@ -921,6 +956,25 @@ function populateCheckpointsArray(){
             continue;
         }
 
+        else if (i == 1 || i == checkpoints.length - 2){
+            let angle;
+            lastX = checkpoints[i - 1][0];
+            lastY = checkpoints[i - 1][1];
+
+            while (true){
+            
+                //The x value is calculated simply by adding the margin to the last checkpoint's x value
+                x = lastX + margin;
+    
+                //The y value is randomly generated
+                y = Math.random() * (canvas.height*0.85 - canvas.height*0.15) + canvas.height*0.15;
+
+                angle = getAngle(lastX, lastY, x, y);
+                if (angle % 180 == 0)
+                    break;
+            }
+        }
+
         //Last checkpoint is fixed - (W, H/2)
         else if (i == numberOfCheckpoints - 1){
             x = canvas.width;
@@ -931,11 +985,10 @@ function populateCheckpointsArray(){
         else{
 
             let angle;
-            lastX = checkpoints[checkpoints.length - 1][0];
-            lastY = checkpoints[checkpoints.length - 1][1];
+            lastX = checkpoints[i - 1][0];
+            lastY = checkpoints[i - 1][1];
 
             while (true){
-            //while (parseInt(angle).toFixed(0) != 90){
 
                 //The x value is calculated simply by adding the margin to the last checkpoint's x value
                 x = lastX + margin;
@@ -959,6 +1012,7 @@ function drawCheckpoints(){
     
     let x, y;
     let nextX, nextY;
+    let rectHeight = 0.05 * canvas.width;
 
     for (let i = 0; i < checkpoints.length; i++){
 
@@ -979,7 +1033,7 @@ function drawCheckpoints(){
             ctx.rotate((angle - 180) * Math.PI/180);
             ctx.translate(x*-1, y*-1);
             ctx.fillStyle = 'darkorange';
-            ctx.fillRect(x, y, d, 100);
+            ctx.fillRect(x - rectHeight/2, y - rectHeight/2, d * 1.1, rectHeight);
             ctx.closePath();
             ctx.restore();
         }
