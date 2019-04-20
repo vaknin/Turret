@@ -29,12 +29,9 @@ let selectedTurret = undefined;
 
 //Shop
 const turretPrice = 100;
-const fireRate1Price = 150;
-const fireRate2Price = 400;
-const fireRate3Price = 750;
-const damage1Price = 150;
-const damage2Price = 400;
-const damage3Price = 750;
+const upgrade1Price = 150;
+const upgrade2Price = 400;
+const upgrade3Price = 750;
 
 //Player info
 let lives = 20;
@@ -72,7 +69,8 @@ class Turret{
         this.rotation = 0;
         this.rotationSpeed = 15;
         this.selected = false;
-        this.damageUpgradeLevel = 1;
+        this.rangeLevel = 1;
+        this.damageLevel = 1;
         this.fireRateLevel = 1;
         this.damageUpgradeCost = 100;
         this.fireRateUpgradeCost = 100;
@@ -397,9 +395,8 @@ class Projectile{
             let negative2 = Math.round(Math.random()) == 0 ? 1 : -1;
             let modifierX = Math.random() * this.particleSpeedModifier * negative1;
             let modifierY = Math.random() * this.particleSpeedModifier * negative2;
-            let r = Math.random() * 1.5 + 0.25;
+            let r = 1.175;
             let p = new Particles(target.x, target.y, modifierX, modifierY, r, target.color);
-            //let p = new Particles(target.x, target.y, this.dx * -1 * modifierX, this.dy * -1 * modifierY, r, target.color);
             objects.push(p);
         }
 
@@ -798,11 +795,36 @@ function createButtons(state){
 
         if (money >= price){
             money -= price;
-            selectedTurret.damageUpgradeLevel++;
+            selectedTurret.damageLevel++;
             selectedTurret.damage++;
         }
 
         createButtons('upgrades');
+    }
+
+    function upgradeRange(price){
+
+        if (money >= price){
+            money -= price;
+            selectedTurret.rangeLevel++;
+            selectedTurret.range *= 1.2;
+        }
+
+        createButtons('upgrades');
+    }
+
+    function fetchPrice(level){
+        if (level == 1){
+            return upgrade1Price;
+        }
+
+        else if (level == 2){
+            return upgrade2Price;
+        }
+
+        else{
+            return upgrade3Price;
+        }
     }
 
     //Erase all buttons
@@ -828,22 +850,14 @@ function createButtons(state){
         //#region Upgrades
         case 'upgrades':
         currentButtons = 'upgrades';
-        let level1, level2, price1, price2;
+        let level1, level2, price1, price2, level3, price3;
 
         //Upgrade Fire Rate
         level1 = selectedTurret.fireRateLevel;
         if (level1 <= 3){
-            if (level1 == 1){
-                price1 = fireRate1Price;
-            }
-
-            else if (level1 == 2){
-                price1 = fireRate2Price;
-            }
-
-            else{
-                price1 = fireRate3Price;
-            }
+            
+            //Get the price accoarding to the turret's level
+            price1 = fetchPrice(level1);
             
             let b1 = new Button(buttonsX, buttonsYmargin * (buttons.length + 2), `./images/buttons/btn_firerate${level1}.png`, () => {upgradeFireRate(price1)}, price1);
             
@@ -851,21 +865,25 @@ function createButtons(state){
         }
         
         //Upgrade damage
-        level2 = selectedTurret.damageUpgradeLevel;
+        level2 = selectedTurret.damageLevel;
         if (level2 <= 3){
-            if (level2 == 1){
-                price2 = damage1Price;
-            }
 
-            else if (level2 == 2){
-                price2 = damage2Price;
-            }
+            //Get the price accoarding to the turret's level
+            price2 = fetchPrice(level2);
 
-            else{
-                price2 = damage3Price;
-            }
             let b2 = new Button(buttonsX, buttonsYmargin * (buttons.length + 2), `./images/buttons/btn_damage${level2}.png`, () => {upgradeDamage(price2)}, price2);
             addButton(b2);
+        }
+
+        //Upgrade range
+        level3 = selectedTurret.rangeLevel;
+        if (level3 <= 3){
+            
+            //Get the price accoarding to the turret's level
+            price3 = fetchPrice(level3);
+            
+            let b3 = new Button(buttonsX, buttonsYmargin * (buttons.length + 2), `./images/buttons/btn_range${level3}.png`, () => {upgradeRange(price3)}, price3);
+            addButton(b3);
         }
 
         break;
