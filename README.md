@@ -1,6 +1,6 @@
 # Turret
 
-### A Tower-defense browser video game, using only vanilla Javascript.
+### A Tower-defense browser video game, using HTML, CSS and Javascript.
 
  - Endless stages
  - Procedurally generated maps
